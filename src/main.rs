@@ -4,11 +4,12 @@
 #[macro_use]
 mod debug;
 mod serial;
+mod vga;
 mod x86;
 
 use core::{fmt::Write, panic::PanicInfo};
 
-use crate::x86::common::halt;
+use crate::{serial::COM1, vga::VGA, x86::common::halt};
 
 #[panic_handler]
 unsafe fn panic(_info: &PanicInfo) -> ! {
@@ -17,16 +18,13 @@ unsafe fn panic(_info: &PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "C" fn start() -> ! {
-	let vga = 0xb8000 as *mut u8;
-
-	unsafe {
-		*vga.offset(0isize) = 'O' as u8;
-		*vga.offset(2isize) = 'K' as u8;
-	}
-
-	serial::init_port(serial::COM1);
+	COM1.init();
 
 	kprintf!("If you can read this, {} logging works", "debug");
+
+	VGA.clear_screen();
+	VGA.disable_cursor();
+	writeln!(VGA, "Welcome to Ivy OS!").unwrap();
 
 	halt()
 }

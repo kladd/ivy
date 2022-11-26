@@ -13,6 +13,24 @@ pub struct SerialPort {
 }
 
 impl SerialPort {
+	pub fn init(&self) {
+		if self.initialized.get() {
+			return;
+		}
+
+		unsafe {
+			// TODO: Document.
+			*self.port.offset(1isize) = 0x00;
+			*self.port.offset(3isize) = 0x80;
+			*self.port.offset(0isize) = 0x02;
+			*self.port.offset(1isize) = 0x00;
+			*self.port.offset(3isize) = 0x03;
+			*self.port.offset(2isize) = 0xC7;
+			*self.port.offset(4isize) = 0x0B;
+		}
+		self.initialized.set(true);
+	}
+
 	fn transmit_empty(&self) -> bool {
 		unsafe { *self.port.offset(5isize) & 0x20 == 0 }
 	}
@@ -33,22 +51,4 @@ impl Write for SerialPort {
 
 		Ok(())
 	}
-}
-
-pub fn init_port(port: SerialPort) {
-	if port.initialized.get() {
-		return;
-	}
-
-	unsafe {
-		// TODO: Document.
-		*port.port.offset(1isize) = 0x00;
-		*port.port.offset(3isize) = 0x80;
-		*port.port.offset(0isize) = 0x02;
-		*port.port.offset(1isize) = 0x00;
-		*port.port.offset(3isize) = 0x03;
-		*port.port.offset(2isize) = 0xC7;
-		*port.port.offset(4isize) = 0x0B;
-	}
-	port.initialized.set(true);
 }
