@@ -3,9 +3,9 @@ kernel := target/kernel/ivy
 all: $(kernel)
 
 $(kernel): always
-	cargo build
+	@cargo build
 
 run: $(kernel)
-	qemu-system-i386 -kernel $< -serial stdio
+	@qemu-system-i386 -kernel $< -serial stdio
 
 always: ;

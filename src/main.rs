@@ -1,12 +1,12 @@
 #![no_std]
 #![no_main]
 
+#[macro_use]
+mod debug;
 mod serial;
 mod x86;
 
-use core::{arch::asm, fmt::Write, panic::PanicInfo};
-
-use serial::COM1;
+use core::{fmt::Write, panic::PanicInfo};
 
 use crate::x86::common::halt;
 
@@ -24,8 +24,9 @@ pub extern "C" fn start() -> ! {
 		*vga.offset(2isize) = 'K' as u8;
 	}
 
-	serial::init_port(COM1);
-	writeln!(COM1, "If you can read this, {} works.", "COM1").unwrap();
+	serial::init_port(serial::COM1);
+
+	kprintf!("If you can read this, {} logging works", "debug");
 
 	halt()
 }
