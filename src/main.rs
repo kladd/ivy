@@ -1,7 +1,11 @@
 #![no_std]
 #![no_main]
 
-use core::{arch::asm, panic::PanicInfo};
+mod serial;
+
+use core::{arch::asm, fmt::Write, panic::PanicInfo};
+
+use serial::COM1;
 
 #[panic_handler]
 unsafe fn panic(_info: &PanicInfo) -> ! {
@@ -23,6 +27,9 @@ pub extern "C" fn start() -> ! {
 		*vga.offset(0isize) = 'O' as u8;
 		*vga.offset(2isize) = 'K' as u8;
 	}
+
+	serial::init_port(COM1);
+	writeln!(COM1, "If you can read this, {} works.", "COM1").unwrap();
 
 	halt()
 }
