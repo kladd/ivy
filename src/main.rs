@@ -2,21 +2,17 @@
 #![no_main]
 
 mod serial;
+mod x86;
 
 use core::{arch::asm, fmt::Write, panic::PanicInfo};
 
 use serial::COM1;
 
+use crate::x86::common::halt;
+
 #[panic_handler]
 unsafe fn panic(_info: &PanicInfo) -> ! {
 	halt()
-}
-
-fn halt() -> ! {
-	unsafe {
-		asm!("hlt");
-	}
-	unreachable!();
 }
 
 #[no_mangle]

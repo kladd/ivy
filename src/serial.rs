@@ -1,4 +1,6 @@
-use core::{arch::asm, cell::Cell, fmt::Write};
+use core::{cell::Cell, fmt::Write};
+
+use crate::x86::common::outb;
 
 pub const COM1: SerialPort = SerialPort {
 	port: 0x3F8 as *mut u8,
@@ -17,9 +19,7 @@ impl SerialPort {
 
 	fn write_byte(&mut self, b: u8) -> core::fmt::Result {
 		while self.transmit_empty() {}
-		unsafe {
-			outb(b, self.port as u16);
-		}
+		outb(b, self.port as u16);
 
 		Ok(())
 	}
@@ -51,10 +51,4 @@ pub fn init_port(port: SerialPort) {
 		*port.port.offset(4isize) = 0x0B;
 	}
 	port.initialized.set(true);
-}
-
-/// x86 OUT instruction for byte operands.
-unsafe fn outb(b: u8, port: u16) {
-	// Output byte in al to I/O port address in dx.
-	asm!("out dx, al", in("al") b, in("dx") port);
 }
