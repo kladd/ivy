@@ -1,0 +1,8 @@
+[build]
+target = "i686-unknown-none.json"
+out-dir = "target/kernel"
+rustflags = ["-C", "link-arg=-Tlink.ld"]
+
+[unstable]
+build-std = ["core"]
+unstable-options = true
