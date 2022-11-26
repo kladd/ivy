@@ -9,9 +9,9 @@ pub fn halt() -> ! {
 }
 
 /// x86 OUT instruction for byte operands.
-pub fn outb(b: u8, port: u16) {
+pub fn outb(port: u16, b: u8) {
 	unsafe {
 		// Output byte in al to I/O port address in dx.
-		asm!("out dx, al", in("al") b, in("dx") port);
+		asm!("out dx, al", in("dx") port, in("al") b);
 	}
 }

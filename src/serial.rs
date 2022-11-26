@@ -19,7 +19,7 @@ impl SerialPort {
 
 	fn write_byte(&mut self, b: u8) -> core::fmt::Result {
 		while self.transmit_empty() {}
-		outb(b, self.port as u16);
+		outb(self.port as u16, b);
 
 		Ok(())
 	}
