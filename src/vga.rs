@@ -50,7 +50,7 @@ impl VideoMemory {
 	pub fn clear_screen(&self) {
 		for i in 0..(COLS * ROWS) as isize {
 			unsafe {
-				*VIDEO_MEMORY.offset(i) = 0x7000;
+				*VIDEO_MEMORY.offset(i) = 0x0020;
 			}
 		}
 
