@@ -3,23 +3,35 @@
 
 #[macro_use]
 mod debug;
+mod boot;
 mod serial;
 mod vga;
 mod x86;
 
-use core::{fmt::Write, panic::PanicInfo};
+use core::{arch::global_asm, fmt::Write, include_str, panic::PanicInfo};
 
-use crate::{serial::COM1, vga::VGA, x86::common::halt};
+use crate::{
+	boot::{MultibootInfo, MULTIBOOT_MAGIC},
+	serial::COM1,
+	vga::VGA,
+	x86::common::halt,
+};
 
 #[panic_handler]
 unsafe fn panic(_info: &PanicInfo) -> ! {
+	kprintf!("kernel {}", _info);
 	halt()
 }
 
 #[no_mangle]
-pub extern "C" fn start() -> ! {
-	COM1.init();
+pub extern "C" fn kernel_start(
+	multiboot_magic: u32,
+	multiboot_info: &MultibootInfo,
+) -> ! {
+	assert_eq!(multiboot_magic, MULTIBOOT_MAGIC);
+	kdbg!(multiboot_info);
 
+	COM1.init();
 	kprintf!("If you can read this, {} logging works", "debug");
 
 	VGA.clear_screen();
@@ -36,3 +48,5 @@ static _MULTIBOOT_MAGIC: i32 = 0x1BADB002;
 static _MULTIBOOT_FLAGS: i32 = 3;
 #[link_section = ".multiboot"]
 static _MULTIBOOT_CHK: i32 = -(_MULTIBOOT_MAGIC + _MULTIBOOT_FLAGS);
+
+global_asm!(include_str!("boot/boot.s"));
