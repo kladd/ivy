@@ -14,7 +14,10 @@ use crate::{
 	boot::{MultibootInfo, MULTIBOOT_MAGIC},
 	serial::COM1,
 	vga::VGA,
-	x86::common::halt,
+	x86::{
+		common::halt,
+		gdt::{GlobalDescriptorTableRegister, SegmentDescriptor},
+	},
 };
 
 #[panic_handler]
@@ -30,6 +33,18 @@ pub extern "C" fn kernel_start(
 ) -> ! {
 	assert_eq!(multiboot_magic, MULTIBOOT_MAGIC);
 	kdbg!(multiboot_info);
+
+	let gdt = [
+		SegmentDescriptor::null(),
+		SegmentDescriptor::new(0xFFFFFFFF, 0, 0x9A, 0xCF),
+		SegmentDescriptor::new(0xFFFFFFFF, 0, 0x92, 0xCF),
+		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xFA, 0xCF),
+		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xF2, 0xCF),
+	];
+	let gdtr = GlobalDescriptorTableRegister::new(gdt);
+	unsafe {
+		gdtr.flush();
+	}
 
 	COM1.init();
 	kprintf!("If you can read this, {} logging works", "debug");

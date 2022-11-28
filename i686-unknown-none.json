@@ -9,7 +9,6 @@
   "llvm-target": "i686-unknown-none-elf",
   "max-atomic-width": 32,
   "panic-strategy": "abort",
-  "position-independent-executables": true,
   "relro-level": "full",
   "stack-probes": {
     "kind": "inline-or-call",
