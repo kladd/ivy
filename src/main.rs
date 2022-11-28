@@ -23,7 +23,7 @@ use crate::{
 	boot::{MultibootInfo, MULTIBOOT_MAGIC},
 	serial::COM1,
 	vga::VGA,
-	x86::{common::halt, descriptor_table::DescriptorTableRegister},
+	x86::{common::halt, descriptor_table::DescriptorTableRegister, pic},
 };
 
 #[panic_handler]
@@ -32,8 +32,15 @@ unsafe fn panic(_info: &PanicInfo) -> ! {
 	halt()
 }
 
-fn exception_handler() -> ! {
-	panic!("CPU exception");
+fn exception_handler(stack_0: u32) -> ! {
+	panic!("CPU exception {}", stack_0);
+}
+
+fn unimplemented_irq() {
+	kprintf!("unimplemented interrupt");
+	unsafe {
+		asm!("iret");
+	}
 }
 
 #[no_mangle]
@@ -57,15 +64,21 @@ pub extern "C" fn kernel_start(
 	}
 
 	let mut idt = [InterruptDescriptor::null(); 256];
+	// Exceptions
 	for i in 0..32 {
 		idt[i] = InterruptDescriptor::new(exception_handler as u32, 0x08, 0x8E);
 	}
-
+	// Remapped PIC
+	for i in 32..48 {
+		idt[i] = InterruptDescriptor::new(unimplemented_irq as u32, 0x08, 0x8E);
+	}
 	let idtr = DescriptorTableRegister::new(idt);
 	unsafe {
 		idt::flush(&idtr);
 		asm!("sti");
 	}
+
+	pic::init();
 
 	COM1.init();
 	kprintf!("If you can read this, {} logging works", "debug");

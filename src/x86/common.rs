@@ -15,3 +15,11 @@ pub fn outb(port: u16, b: u8) {
 		asm!("out dx, al", in("dx") port, in("al") b);
 	}
 }
+
+pub fn inb(port: u16) -> u8 {
+	let mut b: u8;
+	unsafe {
+		asm!("in al, dx", in("dx") port, out("al") b);
+	}
+	b
+}
