@@ -8,22 +8,32 @@ mod serial;
 mod vga;
 mod x86;
 
-use core::{arch::global_asm, fmt::Write, include_str, panic::PanicInfo};
+use core::{
+	arch::{asm, global_asm},
+	fmt::Write,
+	include_str,
+	panic::PanicInfo,
+};
+
+use x86::descriptor_table::{
+	gdt, gdt::SegmentDescriptor, idt, idt::InterruptDescriptor,
+};
 
 use crate::{
 	boot::{MultibootInfo, MULTIBOOT_MAGIC},
 	serial::COM1,
 	vga::VGA,
-	x86::{
-		common::halt,
-		gdt::{GlobalDescriptorTableRegister, SegmentDescriptor},
-	},
+	x86::{common::halt, descriptor_table::DescriptorTableRegister},
 };
 
 #[panic_handler]
 unsafe fn panic(_info: &PanicInfo) -> ! {
 	kprintf!("kernel {}", _info);
 	halt()
+}
+
+fn exception_handler() -> ! {
+	panic!("CPU exception");
 }
 
 #[no_mangle]
@@ -41,9 +51,20 @@ pub extern "C" fn kernel_start(
 		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xFA, 0xCF),
 		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xF2, 0xCF),
 	];
-	let gdtr = GlobalDescriptorTableRegister::new(gdt);
+	let gdtr = DescriptorTableRegister::new(gdt);
 	unsafe {
-		gdtr.flush();
+		gdt::flush(&gdtr);
+	}
+
+	let mut idt = [InterruptDescriptor::null(); 256];
+	for i in 0..32 {
+		idt[i] = InterruptDescriptor::new(exception_handler as u32, 0x08, 0x8E);
+	}
+
+	let idtr = DescriptorTableRegister::new(idt);
+	unsafe {
+		idt::flush(&idtr);
+		asm!("sti");
 	}
 
 	COM1.init();

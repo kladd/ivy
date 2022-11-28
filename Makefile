@@ -9,3 +9,7 @@ run: $(kernel)
 	@qemu-system-i386 -kernel $< -serial stdio
 
 always: ;
+
+.PHONY: clean
+clean:
+	cargo clean

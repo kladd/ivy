@@ -1,4 +1,6 @@
-use core::{arch::asm, mem::size_of};
+use core::arch::asm;
+
+use crate::x86::descriptor_table::DescriptorTableRegister;
 
 #[derive(Default)]
 #[repr(packed)]
@@ -34,24 +36,10 @@ impl SegmentDescriptor {
 	}
 }
 
-#[repr(packed)]
-pub struct GlobalDescriptorTableRegister {
-	_limit: u16,
-	_base: u32,
-}
-
-impl GlobalDescriptorTableRegister {
-	pub fn new<const N: usize>(gdt: [SegmentDescriptor; N]) -> Self {
-		Self {
-			_limit: size_of::<[SegmentDescriptor; N]>() as u16 - 1,
-			_base: &gdt as *const [SegmentDescriptor; N] as u32,
-		}
-	}
-
-	#[allow(named_asm_labels)]
-	pub unsafe fn flush(&self) {
-		asm!(
-			r#"
+#[allow(named_asm_labels)]
+pub unsafe fn flush(dtr: &DescriptorTableRegister) {
+	asm!(
+		r#"
 			lgdt [eax]
 
 			mov ax, 0x10
@@ -63,7 +51,6 @@ impl GlobalDescriptorTableRegister {
 
 			jmp 0x08, offset .resume
 		.resume:"#,
-			in("eax") self,
-		);
-	}
+		in("eax") dtr,
+	);
 }

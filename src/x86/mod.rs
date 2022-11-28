@@ -1,2 +1,2 @@
 pub mod common;
-pub mod gdt;
+pub mod descriptor_table;

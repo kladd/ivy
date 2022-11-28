@@ -3,7 +3,7 @@ use core::arch::asm;
 /// x86 HLT instruction.
 pub fn halt() -> ! {
 	unsafe {
-		asm!("hlt");
+		asm!("cli", "hlt");
 	}
 	unreachable!();
 }
