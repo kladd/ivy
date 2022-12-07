@@ -6,7 +6,7 @@ $(kernel): always
 	@cargo build
 
 run: $(kernel)
-	@qemu-system-i386 -kernel $< -serial stdio
+	@qemu-system-i386 -kernel $< -serial stdio -d int
 
 always: ;
 

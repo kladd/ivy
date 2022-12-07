@@ -1,3 +1,4 @@
+#![feature(abi_x86_interrupt)]
 #![no_std]
 #![no_main]
 
@@ -8,16 +9,17 @@ mod serial;
 mod vga;
 mod x86;
 
-use core::{arch::asm, fmt::Write, panic::PanicInfo};
-
-use x86::descriptor_table::{
-	gdt, gdt::SegmentDescriptor, idt, idt::InterruptDescriptor,
-};
+use core::{fmt::Write, panic::PanicInfo};
 
 use crate::{
+	arch::x86::{
+		disable_interrupts, enable_interrupts,
+		global_descriptor_table::{flush_gdt, init_gdt},
+		interrupt_descriptor_table::{flush_idt, init_idt},
+	},
 	serial::COM1,
 	vga::VGA,
-	x86::{common::halt, descriptor_table::DescriptorTableRegister, pic},
+	x86::{common::halt, pic},
 };
 
 pub const MULTIBOOT_MAGIC: u32 = 0x2BADB002;
@@ -37,51 +39,24 @@ unsafe fn panic(_info: &PanicInfo) -> ! {
 	halt()
 }
 
-fn exception_handler(stack_0: u32) -> ! {
-	panic!("CPU exception {}", stack_0);
-}
-
-fn unimplemented_irq() {
-	kprintf!("unimplemented interrupt");
-	unsafe {
-		asm!("iret");
-	}
-}
-
 #[no_mangle]
 pub extern "C" fn kernel_start(
 	multiboot_magic: u32,
 	multiboot_info: &MultibootInfo,
 ) -> ! {
 	assert_eq!(multiboot_magic, MULTIBOOT_MAGIC);
+
+	disable_interrupts();
+
 	kdbg!(multiboot_info);
 
-	let gdt = [
-		SegmentDescriptor::null(),
-		SegmentDescriptor::new(0xFFFFFFFF, 0, 0x9A, 0xCF),
-		SegmentDescriptor::new(0xFFFFFFFF, 0, 0x92, 0xCF),
-		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xFA, 0xCF),
-		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xF2, 0xCF),
-	];
-	let gdtr = DescriptorTableRegister::new(gdt);
-	unsafe {
-		gdt::flush(&gdtr);
-	}
+	let gdt = init_gdt();
+	flush_gdt(&gdt);
 
-	let mut idt = [InterruptDescriptor::null(); 256];
-	// Exceptions
-	for i in 0..32 {
-		idt[i] = InterruptDescriptor::new(exception_handler as u32, 0x08, 0x8E);
-	}
-	// Remapped PIC
-	for i in 32..48 {
-		idt[i] = InterruptDescriptor::new(unimplemented_irq as u32, 0x08, 0x8E);
-	}
-	let idtr = DescriptorTableRegister::new(idt);
-	unsafe {
-		idt::flush(&idtr);
-		asm!("sti");
-	}
+	let idt = init_idt();
+	flush_idt(&idt);
+
+	enable_interrupts();
 
 	pic::init();
 
