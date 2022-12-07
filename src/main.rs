@@ -4,7 +4,6 @@
 #[macro_use]
 mod debug;
 mod arch;
-mod boot;
 mod serial;
 mod vga;
 mod x86;
@@ -16,11 +15,21 @@ use x86::descriptor_table::{
 };
 
 use crate::{
-	boot::{MultibootInfo, MULTIBOOT_MAGIC},
 	serial::COM1,
 	vga::VGA,
 	x86::{common::halt, descriptor_table::DescriptorTableRegister, pic},
 };
+
+pub const MULTIBOOT_MAGIC: u32 = 0x2BADB002;
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct MultibootInfo {
+	flags: u32,
+	mem_lower: u32,
+	mem_upper: u32,
+	// TODO: The rest.
+}
 
 #[panic_handler]
 unsafe fn panic(_info: &PanicInfo) -> ! {
