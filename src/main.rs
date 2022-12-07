@@ -3,17 +3,13 @@
 
 #[macro_use]
 mod debug;
+mod arch;
 mod boot;
 mod serial;
 mod vga;
 mod x86;
 
-use core::{
-	arch::{asm, global_asm},
-	fmt::Write,
-	include_str,
-	panic::PanicInfo,
-};
+use core::{arch::asm, fmt::Write, panic::PanicInfo};
 
 use x86::descriptor_table::{
 	gdt, gdt::SegmentDescriptor, idt, idt::InterruptDescriptor,
@@ -89,13 +85,3 @@ pub extern "C" fn kernel_start(
 
 	halt()
 }
-
-#[link_section = ".multiboot"]
-static _MULTIBOOT_MAGIC: i32 = 0x1BADB002;
-#[link_section = ".multiboot"]
-// ALIGN | MEM_INFO
-static _MULTIBOOT_FLAGS: i32 = 3;
-#[link_section = ".multiboot"]
-static _MULTIBOOT_CHK: i32 = -(_MULTIBOOT_MAGIC + _MULTIBOOT_FLAGS);
-
-global_asm!(include_str!("boot/boot.s"));
