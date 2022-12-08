@@ -76,7 +76,7 @@ unsafe fn flush_idt() {
 
 #[no_mangle]
 extern "C" fn print_exception_stack_frame(es: &ExceptionStackFrame) {
-	kdbg!(es);
+	panic!("{:?}", es);
 }
 
 extern "C" {
