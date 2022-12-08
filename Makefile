@@ -18,7 +18,7 @@ $(kernel): $(start_a) always
 	@cargo build
 
 run: $(kernel)
-	@qemu-system-i386 -kernel $< -serial stdio -d int
+	@qemu-system-i386 -kernel $< -serial stdio
 
 always: ;
 

@@ -63,6 +63,12 @@ pub fn init_idt() {
 	}
 }
 
+pub fn register_handler(int: usize, handler: u32) {
+	unsafe {
+		DESCRIPTOR_TABLE[int] = InterruptDescriptor::new(handler, 0x08, 0x8E);
+	}
+}
+
 unsafe fn flush_idt() {
 	let idtr = DescriptorTableRegister::new(&DESCRIPTOR_TABLE);
 	asm!("lidt [eax]", in("eax") &idtr);

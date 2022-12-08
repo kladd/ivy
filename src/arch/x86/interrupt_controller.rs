@@ -13,7 +13,7 @@ const ICW1_ICW4: u8 = 0x01;
 
 const ICW4_8086: u8 = 0x01;
 
-pub fn init() {
+pub fn init_pic() {
 	// Save masks.
 	let pic1_mask = inb(PIC1_DAT);
 	let pic2_mask = inb(PIC2_DAT);

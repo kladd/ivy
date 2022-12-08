@@ -13,12 +13,12 @@ use core::{fmt::Write, panic::PanicInfo};
 use crate::{
 	arch::x86::{
 		disable_interrupts, enable_interrupts,
-		global_descriptor_table::init_gdt, int3,
-		interrupt_descriptor_table::init_idt,
+		global_descriptor_table::init_gdt, halt,
+		interrupt_controller::init_pic, interrupt_descriptor_table::init_idt,
+		timer::init_timer,
 	},
 	serial::COM1,
 	vga::VGA,
-	x86::{common::halt, pic},
 };
 
 pub const MULTIBOOT_MAGIC: u32 = 0x2BADB002;
@@ -34,6 +34,7 @@ pub struct MultibootInfo {
 
 #[panic_handler]
 unsafe fn panic(_info: &PanicInfo) -> ! {
+	disable_interrupts();
 	kprintf!("kernel {}", _info);
 	halt()
 }
@@ -53,21 +54,18 @@ pub extern "C" fn kernel_start(
 
 	init_gdt();
 	init_idt();
+	init_pic();
+
+	init_timer();
 
 	enable_interrupts();
 
-	pic::init();
-
 	COM1.init();
 	kprintf!("If you can read this, {} logging works", "debug");
-
-	int3();
-
-	kprintf!("If you can read this, {} interrupt handling works", "debug");
 
 	VGA.clear_screen();
 	VGA.disable_cursor();
 	writeln!(VGA, "Welcome to Ivy OS!").unwrap();
 
-	halt()
+	loop {}
 }

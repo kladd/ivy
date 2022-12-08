@@ -2,7 +2,9 @@ use core::arch::asm;
 
 mod descriptor_table;
 pub mod global_descriptor_table;
+pub mod interrupt_controller;
 pub mod interrupt_descriptor_table;
+pub mod timer;
 
 pub fn enable_interrupts() {
 	unsafe {
@@ -16,8 +18,7 @@ pub fn disable_interrupts() {
 	}
 }
 
-pub fn int3() {
-	unsafe {
-		asm!("int 3");
-	}
+/// x86 HLT instruction.
+pub fn halt() -> ! {
+	unsafe { asm!("hlt", options(noreturn)) }
 }

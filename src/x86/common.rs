@@ -1,13 +1,5 @@
 use core::arch::asm;
 
-/// x86 HLT instruction.
-pub fn halt() -> ! {
-	unsafe {
-		asm!("cli", "hlt");
-	}
-	unreachable!();
-}
-
 /// x86 OUT instruction for byte operands.
 pub fn outb(port: u16, b: u8) {
 	unsafe {

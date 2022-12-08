@@ -6,6 +6,7 @@ extern _bss
 extern _end
 extern kernel_start
 extern print_exception_stack_frame
+extern handle_interval_timer
 
 section .multiboot
 header_start:
@@ -50,6 +51,15 @@ unimplemented_interrupt_handler:
 	push eax
 	call print_exception_stack_frame
 	pop eax
+	popad
+	sti
+	iret
+
+global interval_timer_handler
+interval_timer_handler:
+	cli
+	pushad
+	call handle_interval_timer
 	popad
 	sti
 	iret
