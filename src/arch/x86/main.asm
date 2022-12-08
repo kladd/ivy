@@ -36,7 +36,6 @@ _start:
 	cli
 	call kernel_start
 _halt:
-	cli
 	hlt
 	jmp _halt
 
