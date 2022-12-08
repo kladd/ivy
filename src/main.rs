@@ -43,12 +43,9 @@ unsafe fn panic(_info: &PanicInfo) -> ! {
 pub extern "C" fn kernel_start(
 	multiboot_magic: u32,
 	multiboot_info: &MultibootInfo,
-	stack_top: u32,
-	stack_bottom: u32,
 ) -> ! {
 	assert_eq!(multiboot_magic, MULTIBOOT_MAGIC);
 	kdbg!(multiboot_info);
-	kprintf!("{:#08X} {:#08X}", stack_bottom, stack_top);
 
 	disable_interrupts();
 
