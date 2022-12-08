@@ -3,6 +3,8 @@ use core::arch::asm;
 use crate::arch::x86::descriptor_table::DescriptorTableRegister;
 
 const SEGMENT_DESCRIPTOR_COUNT: usize = 5;
+static mut DESCRIPTOR_TABLE: [SegmentDescriptor; SEGMENT_DESCRIPTOR_COUNT] =
+	[SegmentDescriptor::null(); SEGMENT_DESCRIPTOR_COUNT];
 
 #[derive(Copy, Clone)]
 #[repr(packed)]
@@ -45,21 +47,31 @@ impl SegmentDescriptor {
 	}
 }
 
-pub fn init_gdt() -> [SegmentDescriptor; SEGMENT_DESCRIPTOR_COUNT] {
-	[
-		SegmentDescriptor::null(),
-		SegmentDescriptor::new(0xFFFFFFFF, 0, 0x9A, 0xCF),
-		SegmentDescriptor::new(0xFFFFFFFF, 0, 0x92, 0xCF),
-		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xFA, 0xCF),
-		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xF2, 0xCF),
-	]
+// pub fn init_gdt() -> [SegmentDescriptor; SEGMENT_DESCRIPTOR_COUNT] {
+// 	[
+// 		SegmentDescriptor::null(),
+// 		SegmentDescriptor::new(0xFFFFFFFF, 0, 0x9A, 0xCF),
+// 		SegmentDescriptor::new(0xFFFFFFFF, 0, 0x92, 0xCF),
+// 		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xFA, 0xCF),
+// 		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xF2, 0xCF),
+// 	]
+// }
+
+pub fn init_gdt() {
+	unsafe {
+		DESCRIPTOR_TABLE[1] = SegmentDescriptor::new(0xFFFFFFFF, 0, 0x9A, 0xCF);
+		DESCRIPTOR_TABLE[2] = SegmentDescriptor::new(0xFFFFFFFF, 0, 0x92, 0xCF);
+		DESCRIPTOR_TABLE[3] = SegmentDescriptor::new(0xFFFFFFFF, 0, 0xFA, 0xCF);
+		DESCRIPTOR_TABLE[4] = SegmentDescriptor::new(0xFFFFFFFF, 0, 0xF2, 0xCF);
+		flush_gdt();
+	}
 }
 
 #[allow(named_asm_labels)]
-pub fn flush_gdt(gdt: &[SegmentDescriptor; SEGMENT_DESCRIPTOR_COUNT]) {
+fn flush_gdt() {
 	// TODO: Don't hard-code segment offsets.
-	let gdtr = DescriptorTableRegister::new(gdt);
 	unsafe {
+		let gdtr = DescriptorTableRegister::new(&DESCRIPTOR_TABLE);
 		asm!(
 			r#"
 			lgdt [eax]

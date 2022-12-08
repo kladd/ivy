@@ -1,4 +1,3 @@
-#![feature(abi_x86_interrupt)]
 #![no_std]
 #![no_main]
 
@@ -14,8 +13,8 @@ use core::{fmt::Write, panic::PanicInfo};
 use crate::{
 	arch::x86::{
 		disable_interrupts, enable_interrupts,
-		global_descriptor_table::{flush_gdt, init_gdt},
-		interrupt_descriptor_table::{flush_idt, init_idt},
+		global_descriptor_table::init_gdt, int3,
+		interrupt_descriptor_table::init_idt,
 	},
 	serial::COM1,
 	vga::VGA,
@@ -43,18 +42,17 @@ unsafe fn panic(_info: &PanicInfo) -> ! {
 pub extern "C" fn kernel_start(
 	multiboot_magic: u32,
 	multiboot_info: &MultibootInfo,
+	stack_top: u32,
+	stack_bottom: u32,
 ) -> ! {
 	assert_eq!(multiboot_magic, MULTIBOOT_MAGIC);
+	kdbg!(multiboot_info);
+	kprintf!("{:#08X} {:#08X}", stack_bottom, stack_top);
 
 	disable_interrupts();
 
-	kdbg!(multiboot_info);
-
-	let gdt = init_gdt();
-	flush_gdt(&gdt);
-
-	let idt = init_idt();
-	flush_idt(&idt);
+	init_gdt();
+	init_idt();
 
 	enable_interrupts();
 
@@ -62,6 +60,10 @@ pub extern "C" fn kernel_start(
 
 	COM1.init();
 	kprintf!("If you can read this, {} logging works", "debug");
+
+	int3();
+
+	kprintf!("If you can read this, {} interrupt handling works", "debug");
 
 	VGA.clear_screen();
 	VGA.disable_cursor();

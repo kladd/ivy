@@ -1,4 +1,4 @@
-use core::{cell::Cell, fmt::Write};
+use core::cell::Cell;
 
 use crate::x86::common::outb;
 
@@ -43,7 +43,7 @@ impl SerialPort {
 	}
 }
 
-impl Write for SerialPort {
+impl ::core::fmt::Write for SerialPort {
 	fn write_str(&mut self, s: &str) -> core::fmt::Result {
 		for b in s.bytes() {
 			self.write_byte(b)?;
