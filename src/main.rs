@@ -4,6 +4,7 @@
 #[macro_use]
 mod debug;
 mod arch;
+mod multiboot;
 mod serial;
 mod vga;
 mod x86;
@@ -17,20 +18,12 @@ use crate::{
 		interrupt_controller::init_pic, interrupt_descriptor_table::init_idt,
 		timer::init_timer,
 	},
+	multiboot::{MultibootFlags, MultibootInfo},
 	serial::COM1,
 	vga::VGA,
 };
 
 pub const MULTIBOOT_MAGIC: u32 = 0x2BADB002;
-
-#[derive(Debug)]
-#[repr(C)]
-pub struct MultibootInfo {
-	flags: u32,
-	mem_lower: u32,
-	mem_upper: u32,
-	// TODO: The rest.
-}
 
 #[panic_handler]
 unsafe fn panic(_info: &PanicInfo) -> ! {
@@ -42,12 +35,11 @@ unsafe fn panic(_info: &PanicInfo) -> ! {
 #[no_mangle]
 pub extern "C" fn kernel_start(
 	multiboot_magic: u32,
-	multiboot_info: &MultibootInfo,
+	multiboot_flags: &MultibootFlags,
 ) {
 	assert_eq!(multiboot_magic, MULTIBOOT_MAGIC);
-	kdbg!(multiboot_info);
-
-	disable_interrupts();
+	let boot_info = MultibootInfo::read(multiboot_flags);
+	kdbg!(boot_info);
 
 	init_gdt();
 	init_idt();
