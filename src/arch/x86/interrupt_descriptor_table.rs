@@ -1,4 +1,4 @@
-use core::{arch::asm, fmt::Write};
+use core::arch::asm;
 
 use crate::arch::x86::descriptor_table::DescriptorTableRegister;
 
@@ -19,7 +19,9 @@ pub struct InterruptDescriptor {
 
 #[derive(Debug)]
 #[repr(C)]
-struct ExceptionStackFrame {
+pub struct InterruptStackFrame {
+	irq: u32,
+	error_code: u32,
 	eip: u32,
 	cs: u32,
 	eflags: u32,
@@ -50,22 +52,106 @@ impl InterruptDescriptor {
 	}
 }
 
+#[macro_export]
+macro_rules! isr {
+	($irq:expr, $name:ident) => {{
+		#[naked]
+		unsafe extern "C" fn handle_irq() -> ! {
+			::core::arch::asm!(
+				concat!( "cli; push 0; push ", stringify!($irq)),
+				r#"
+				cli
+				pushad
+
+				mov eax, esp
+				add eax, 32
+				push eax
+
+				call {}
+
+				add esp, 4
+				popad
+				add esp, 8
+				sti
+				iretd
+				"#,
+				sym $name,
+				options(noreturn)
+			)
+		}
+		($irq as usize, handle_irq as u32)
+	}}
+}
+
+#[macro_export]
+macro_rules! isr_code {
+	($irq:expr, $name:ident) => {{
+		#[naked]
+		unsafe extern "C" fn handle_irq() -> ! {
+			::core::arch::asm!(
+				concat!( "cli; push ", stringify!($irq)),
+				r#"
+				cli
+				pushad
+
+				mov eax, esp
+				add eax, 32
+				push eax
+
+				call {}
+
+				add esp, 4
+				popad
+				add esp, 4
+				sti
+				iretd
+				"#,
+				sym $name,
+				options(noreturn)
+			)
+		}
+		($irq as usize, handle_irq as u32)
+	}};
+}
+
 pub fn init_idt() {
 	unsafe {
-		for i in 0..32 {
-			DESCRIPTOR_TABLE[i] = InterruptDescriptor::new(
-				unimplemented_interrupt_handler as u32,
-				0x08,
-				0x8E,
-			);
-		}
+		// Table 6-1. Protected-Mode Exceptions and Interrupts
+		register_handler(isr!(0, print_irq));
+		register_handler(isr!(1, print_irq));
+		register_handler(isr!(2, print_irq));
+		register_handler(isr!(3, print_irq));
+		register_handler(isr!(4, print_irq));
+		register_handler(isr!(5, print_irq));
+		register_handler(isr!(6, print_irq));
+		register_handler(isr!(7, print_irq));
+
+		register_handler(isr_code!(8, print_irq));
+
+		register_handler(isr!(9, print_irq));
+
+		register_handler(isr_code!(10, print_irq));
+		register_handler(isr_code!(11, print_irq));
+		register_handler(isr_code!(12, print_irq));
+		register_handler(isr_code!(13, print_irq));
+		register_handler(isr_code!(14, print_irq));
+
+		register_handler(isr!(16, print_irq));
+
+		register_handler(isr_code!(17, print_irq));
+
+		register_handler(isr!(18, print_irq));
+		register_handler(isr!(19, print_irq));
+		register_handler(isr!(20, print_irq));
+
 		flush_idt();
 	}
 }
 
-pub fn register_handler(int: usize, handler: u32) {
+pub fn register_handler(handler: (usize, u32)) {
 	unsafe {
-		DESCRIPTOR_TABLE[int] = InterruptDescriptor::new(handler, 0x08, 0x8E);
+		DESCRIPTOR_TABLE[handler.0] =
+			InterruptDescriptor::new(handler.1, 0x08, 0x8E);
 	}
 }
 
@@ -75,11 +161,6 @@ unsafe fn flush_idt() {
 }
 
 #[no_mangle]
-extern "C" fn print_exception_stack_frame(es: &ExceptionStackFrame) {
+extern "C" fn print_irq(es: &InterruptStackFrame) {
 	panic!("{:?}", es);
-}
-
-extern "C" {
-	// main.asm
-	fn unimplemented_interrupt_handler() -> !;
 }

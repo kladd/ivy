@@ -6,7 +6,6 @@ extern _bss
 extern _end
 extern kernel_start
 extern print_exception_stack_frame
-extern handle_interval_timer
 
 section .multiboot
 header_start:
@@ -38,28 +37,6 @@ _start:
 _halt:
 	hlt
 	jmp _halt
-
-global unimplemented_interrupt_handler
-unimplemented_interrupt_handler:
-	cli
-	pushad
-	mov eax, esp
-	add eax, 32
-	push eax
-	call print_exception_stack_frame
-	pop eax
-	popad
-	sti
-	iret
-
-global interval_timer_handler
-interval_timer_handler:
-	cli
-	pushad
-	call handle_interval_timer
-	popad
-	sti
-	iret
 
 global enable_paging
 enable_paging:
