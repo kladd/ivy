@@ -41,6 +41,12 @@ pub extern "C" fn kernel_start(
 	let boot_info = MultibootInfo::read(multiboot_flags);
 	kdbg!(boot_info);
 
+	unsafe {
+		VGA.clear_screen();
+		VGA.disable_cursor();
+		writeln!(VGA, "Welcome to Ivy OS!").unwrap();
+	}
+
 	init_gdt();
 	init_idt();
 	init_pic();
@@ -51,8 +57,4 @@ pub extern "C" fn kernel_start(
 
 	COM1.init();
 	kprintf!("If you can read this, {} logging works", "debug");
-
-	VGA.clear_screen();
-	VGA.disable_cursor();
-	writeln!(VGA, "Welcome to Ivy OS!").unwrap();
 }
