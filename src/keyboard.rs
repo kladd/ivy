@@ -11,7 +11,7 @@ const NUL: char = 0 as char;
 
 const ASCII_NO_MOD: [char; 89] = [
 	NUL, NUL, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', NUL,
-	NUL, 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', NUL, NUL,
+	NUL, 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n', NUL,
 	'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', NUL, '\\',
 	'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', NUL, '*', NUL, ' ', NUL,
 	NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
@@ -59,6 +59,10 @@ fn mod_shift() -> bool {
 	unsafe { MODS & MOD_SHIFT != 0 }
 }
 
+fn mod_ctrl() -> bool {
+	unsafe { MODS & MOD_CTRL != 0 }
+}
+
 unsafe extern "C" fn irq_handler() {
 	while keyboard_has_data() {
 		match keyboard_read_scan_code() {
@@ -69,6 +73,15 @@ unsafe extern "C" fn irq_handler() {
 			0xB8 => MODS &= !MOD_ALT,
 			0x9D => MODS &= !MOD_CTRL,
 			0xAA => MODS &= !MOD_SHIFT,
+
+			// Control characters. All this will surely not write
+			// straight to VGA.
+			0x16 if mod_ctrl() => VGA.nack(),
+			0x1E if mod_ctrl() => VGA.start_of_heading(),
+			0x25 if mod_ctrl() => VGA.vertical_tab(),
+			0x26 if mod_ctrl() => VGA.form_feed(),
+
+			0x0E => VGA.backspace(),
 
 			scan_code if is_key_down(scan_code) => {
 				let c = if mod_shift() {

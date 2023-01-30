@@ -78,7 +78,6 @@ pub extern "C" fn kernel_start(
 
 	unsafe {
 		VGA.clear_screen();
-		VGA.disable_cursor();
 		writeln!(VGA, "Welcome to Ivy OS!").unwrap();
 	}
 
