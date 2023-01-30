@@ -6,6 +6,7 @@
 mod debug;
 mod arch;
 mod keyboard;
+mod libk;
 mod multiboot;
 mod serial;
 mod vga;
@@ -25,6 +26,7 @@ use crate::{
 		timer::init_timer,
 	},
 	keyboard::init_keyboard,
+	libk::vec::Vec,
 	multiboot::{MultibootFlags, MultibootInfo},
 	serial::COM1,
 	vga::VGA,
@@ -91,6 +93,22 @@ pub extern "C" fn kernel_start(
 
 	COM1.init();
 	kprintf!("If you can read this, {} logging works", "debug");
+
+	let mut v1 = Vec::new(5);
+	v1.push('a');
+	v1.push('b');
+
+	let mut v2 = Vec::new(3);
+	v2.push('z');
+	v2.push('y');
+
+	for i in 0..v1.len() {
+		kprintf!("v1[{}] = {}", i, v1.get(i));
+	}
+
+	for i in 0..v2.len() {
+		kprintf!("v2[{}] = {}", i, v2.get(i));
+	}
 
 	dump_register!("cr0");
 }
