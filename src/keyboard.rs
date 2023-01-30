@@ -1,0 +1,92 @@
+use core::fmt::Write;
+
+use crate::{
+	arch::x86::interrupt_descriptor_table::register_handler,
+	isr,
+	vga::VGA,
+	x86::common::{inb, outb},
+};
+
+const NUL: char = 0 as char;
+
+const ASCII_NO_MOD: [char; 89] = [
+	NUL, NUL, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', NUL,
+	NUL, 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', NUL, NUL,
+	'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`', NUL, '\\',
+	'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', NUL, '*', NUL, ' ', NUL,
+	NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
+	NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
+];
+
+const ASCII_MOD_SHIFT: [char; 89] = [
+	NUL, NUL, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', NUL,
+	NUL, 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', NUL, NUL,
+	'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~', NUL, '|', 'Z',
+	'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', NUL, '*', NUL, ' ', NUL, NUL,
+	NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
+	NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL, NUL,
+];
+
+const MOD_ALT: u8 = 1;
+const MOD_CTRL: u8 = 2;
+const MOD_SHIFT: u8 = 4;
+
+const I8042_STATUS_PORT: u16 = 0x64;
+const I8042_BUFFER_PORT: u16 = 0x60;
+const I8042_KEY_DEPRESSED: u8 = 0x80;
+
+const STATUS_DATA_AVAILABLE: u8 = 0x1;
+
+static mut MODS: u8 = 0;
+
+pub fn init_keyboard() {
+	register_handler(isr!(0x21, irq_handler));
+}
+
+fn keyboard_has_data() -> bool {
+	(inb(I8042_STATUS_PORT) & STATUS_DATA_AVAILABLE) != 0
+}
+
+fn keyboard_read_scan_code() -> u8 {
+	inb(I8042_BUFFER_PORT)
+}
+
+fn is_key_down(scan_code: u8) -> bool {
+	scan_code & I8042_KEY_DEPRESSED == 0
+}
+
+fn mod_shift() -> bool {
+	unsafe { MODS & MOD_SHIFT != 0 }
+}
+
+unsafe extern "C" fn irq_handler() {
+	while keyboard_has_data() {
+		match keyboard_read_scan_code() {
+			0x38 => MODS |= MOD_ALT,
+			0x1D => MODS |= MOD_CTRL,
+			0x2A => MODS |= MOD_SHIFT,
+
+			0xB8 => MODS &= !MOD_ALT,
+			0x9D => MODS &= !MOD_CTRL,
+			0xAA => MODS &= !MOD_SHIFT,
+
+			scan_code if is_key_down(scan_code) => {
+				let c = if mod_shift() {
+					ASCII_MOD_SHIFT[scan_code as usize]
+				} else {
+					ASCII_NO_MOD[scan_code as usize]
+				};
+
+				if c != NUL {
+					unsafe {
+						write!(VGA, "{}", c).unwrap();
+					}
+				}
+			}
+
+			_ => continue,
+		}
+	}
+
+	outb(0x20, 0x20);
+}

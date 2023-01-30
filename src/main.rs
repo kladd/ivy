@@ -5,6 +5,7 @@
 #[macro_use]
 mod debug;
 mod arch;
+mod keyboard;
 mod multiboot;
 mod serial;
 mod vga;
@@ -15,13 +16,19 @@ use core::{arch::asm, fmt::Write, panic::PanicInfo};
 use crate::{
 	arch::x86::{
 		disable_interrupts, enable_interrupts,
-		global_descriptor_table::init_gdt, halt,
-		interrupt_controller::init_pic, interrupt_descriptor_table::init_idt,
+		global_descriptor_table::init_gdt,
+		halt,
+		interrupt_controller::init_pic,
+		interrupt_descriptor_table::{
+			init_idt, register_handler, InterruptStackFrame,
+		},
 		timer::init_timer,
 	},
+	keyboard::init_keyboard,
 	multiboot::{MultibootFlags, MultibootInfo},
 	serial::COM1,
 	vga::VGA,
+	x86::common::{inb, outb},
 };
 
 pub const MULTIBOOT_MAGIC: u32 = 0x2BADB002;
@@ -78,6 +85,7 @@ pub extern "C" fn kernel_start(
 	init_pic();
 
 	init_timer();
+	init_keyboard();
 
 	enable_interrupts();
 
