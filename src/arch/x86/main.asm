@@ -48,3 +48,25 @@ enable_paging:
 
     pop eax
     ret
+
+global insl_asm
+insl_asm:
+    push ebp
+    mov ebp, esp
+
+    push ecx
+    push edi
+    push eax
+
+    mov ecx, [ebp + 16] ; third argument, length in ecx
+    mov edi, [ebp + 12] ; second argument (out) in edi
+    mov dx, [ebp + 8] ; first argument (port) in dx
+
+    rep insd
+
+    pop eax
+    pop edi
+    pop ecx
+
+    pop ebp
+    ret

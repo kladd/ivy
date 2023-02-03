@@ -15,3 +15,11 @@ pub fn inb(port: u16) -> u8 {
 	}
 	b
 }
+
+pub fn insl(port: u16, out: u32, count: u32) {
+	unsafe { insl_asm(port, out, count) }
+}
+
+extern "C" {
+	pub fn insl_asm(port: u16, out: u32, count: u32);
+}

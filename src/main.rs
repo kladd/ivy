@@ -5,6 +5,7 @@
 #[macro_use]
 mod debug;
 mod arch;
+mod ide;
 mod keyboard;
 mod libk;
 mod multiboot;
@@ -20,11 +21,10 @@ use crate::{
 		global_descriptor_table::init_gdt,
 		halt,
 		interrupt_controller::init_pic,
-		interrupt_descriptor_table::{
-			init_idt, register_handler, InterruptStackFrame,
-		},
+		interrupt_descriptor_table::{init_idt, InterruptStackFrame},
 		timer::init_timer,
 	},
+	ide::{ide_init, ide_wait, read_block_1},
 	keyboard::init_keyboard,
 	libk::vec::Vec,
 	multiboot::{MultibootFlags, MultibootInfo},
@@ -110,4 +110,7 @@ pub extern "C" fn kernel_start(
 	}
 
 	dump_register!("cr0");
+	ide_wait();
+	ide_init();
+	read_block_1();
 }
