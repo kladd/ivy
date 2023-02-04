@@ -21,7 +21,7 @@ use crate::{
 		global_descriptor_table::init_gdt,
 		halt,
 		interrupt_controller::init_pic,
-		interrupt_descriptor_table::{init_idt, InterruptStackFrame},
+		interrupt_descriptor_table::{init_idt, InterruptRequest},
 		timer::init_timer,
 	},
 	ide::{ide_init, ide_wait, read_block_1},

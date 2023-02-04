@@ -1,6 +1,8 @@
 use core::arch::asm;
 
-use crate::arch::x86::descriptor_table::DescriptorTableRegister;
+use crate::{
+	arch::x86::descriptor_table::DescriptorTableRegister, x86::common::outb,
+};
 
 const MAX_INTERRUPTS: usize = 256;
 
@@ -19,7 +21,7 @@ pub struct InterruptDescriptor {
 
 #[derive(Debug)]
 #[repr(C)]
-pub struct InterruptStackFrame {
+pub struct InterruptRequest {
 	irq: u32,
 	error_code: u32,
 	eip: u32,
@@ -27,6 +29,16 @@ pub struct InterruptStackFrame {
 	eflags: u32,
 	esp: u32,
 	ss: u32,
+}
+
+impl InterruptRequest {
+	pub fn eoi(&self) {
+		if self.irq > 40 {
+			// TODO: there are constants for the PIC ports elsewhere, use those.
+			outb(0xA0, 0x20);
+		}
+		outb(0x20, 0x20);
+	}
 }
 
 impl InterruptDescriptor {
@@ -161,6 +173,6 @@ unsafe fn flush_idt() {
 }
 
 #[no_mangle]
-extern "C" fn print_irq(es: &InterruptStackFrame) {
+extern "C" fn print_irq(es: &InterruptRequest) {
 	panic!("{:?}", es);
 }

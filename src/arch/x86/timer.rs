@@ -1,6 +1,6 @@
 use crate::{
 	arch::x86::interrupt_descriptor_table::{
-		register_handler, InterruptStackFrame,
+		register_handler, InterruptRequest,
 	},
 	isr,
 	x86::common::outb,
@@ -15,7 +15,7 @@ pub fn init_timer() {
 	register_handler(isr!(32, handle_interval_timer));
 }
 
-pub extern "C" fn handle_interval_timer(_: &InterruptStackFrame) {
+pub extern "C" fn handle_interval_timer(_: &InterruptRequest) {
 	// Send EOI
 	outb(0x20, 0x20);
 
