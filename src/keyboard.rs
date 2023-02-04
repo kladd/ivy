@@ -3,7 +3,7 @@ use core::fmt::Write;
 use crate::{
 	arch::x86::interrupt_descriptor_table::register_handler,
 	isr,
-	vga::VGA,
+	vga::VideoMemory,
 	x86::common::{inb, outb},
 };
 
@@ -65,6 +65,8 @@ fn mod_ctrl() -> bool {
 
 unsafe extern "C" fn irq_handler() {
 	while keyboard_has_data() {
+		let mut vga = VideoMemory::get();
+
 		match keyboard_read_scan_code() {
 			0x38 => MODS |= MOD_ALT,
 			0x1D => MODS |= MOD_CTRL,
@@ -75,13 +77,13 @@ unsafe extern "C" fn irq_handler() {
 			0xAA => MODS &= !MOD_SHIFT,
 
 			// Control characters. All this will surely not write
-			// straight to VGA.
-			0x16 if mod_ctrl() => VGA.nack(),
-			0x1E if mod_ctrl() => VGA.start_of_heading(),
-			0x25 if mod_ctrl() => VGA.vertical_tab(),
-			0x26 if mod_ctrl() => VGA.form_feed(),
+			// straight to vga.
+			0x16 if mod_ctrl() => vga.nack(),
+			0x1E if mod_ctrl() => vga.start_of_heading(),
+			0x25 if mod_ctrl() => vga.vertical_tab(),
+			0x26 if mod_ctrl() => vga.form_feed(),
 
-			0x0E => VGA.backspace(),
+			0x0E => vga.backspace(),
 
 			scan_code if is_key_down(scan_code) => {
 				let c = if mod_shift() {
@@ -91,9 +93,7 @@ unsafe extern "C" fn irq_handler() {
 				};
 
 				if c != NUL {
-					unsafe {
-						write!(VGA, "{}", c).unwrap();
-					}
+					write!(vga, "{}", c).unwrap();
 				}
 			}
 

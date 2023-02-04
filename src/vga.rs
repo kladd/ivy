@@ -9,25 +9,23 @@ const COLS: usize = 80;
 const LINE_FEED: u8 = '\n' as u8;
 const CARRIAGE_RETURN: u8 = '\r' as u8;
 
-pub static mut VGA: VideoMemory = VideoMemory {
-	row: 0,
-	col: 0,
-	color: WHITE | BLUE << 4,
-};
-
 const BLACK: u8 = 0x0;
 const BLUE: u8 = 0x1;
 const WHITE: u8 = 0xF;
 
-pub struct VideoMemory {
-	row: usize,
-	col: usize,
-	color: u8,
-}
+static mut ROW: usize = 0;
+static mut COL: usize = 0;
+static mut COLOR: u8 = WHITE | BLUE << 4;
+
+pub struct VideoMemory;
 
 impl VideoMemory {
+	pub fn get() -> Self {
+		Self
+	}
+
 	fn cell(&self, c: u8) -> u16 {
-		(self.color as u16) << 8 | c as u16
+		unsafe { (COLOR as u16) << 8 | c as u16 }
 	}
 
 	fn write_byte(&mut self, byte: u8) -> core::fmt::Result {
@@ -38,42 +36,46 @@ impl VideoMemory {
 		}
 	}
 
-	fn insert_newline(&mut self) -> core::fmt::Result {
-		self.row += 1;
-		self.col = 0;
-		self.set_cursor();
-
-		Ok(())
-	}
-
-	fn insert_carriage_return(&mut self) -> core::fmt::Result {
-		self.col = 0;
-		self.set_cursor();
-
-		Ok(())
-	}
-
-	fn write_byte_visible(&mut self, byte: u8) -> core::fmt::Result {
-		let cursor = self.row * COLS + self.col;
+	fn insert_newline(&self) -> core::fmt::Result {
 		unsafe {
+			ROW += 1;
+			COL = 0;
+		}
+		self.set_cursor();
+
+		Ok(())
+	}
+
+	fn insert_carriage_return(&self) -> core::fmt::Result {
+		unsafe { COL = 0 }
+		self.set_cursor();
+
+		Ok(())
+	}
+
+	fn write_byte_visible(&self, byte: u8) -> core::fmt::Result {
+		unsafe {
+			let cursor = ROW * COLS + COL;
 			*VIDEO_MEMORY.offset(cursor as isize) = self.cell(byte);
+			ROW += (COL + 1) / COLS;
+			COL = (COL + 1) % COLS;
 		}
 
-		self.row += (self.col + 1) / COLS;
-		self.col = (self.col + 1) % COLS;
-
 		Ok(())
 	}
 
-	pub fn clear_screen(&mut self) {
+	pub fn clear_screen(&self) {
 		for i in 0..(COLS * ROWS) as isize {
 			unsafe {
 				*VIDEO_MEMORY.offset(i) = self.cell(0x20);
 			}
 		}
 
-		self.row = 0;
-		self.col = 0;
+		unsafe {
+			ROW = 0;
+			COL = 0;
+		}
+
 		self.set_cursor();
 	}
 
@@ -82,43 +84,43 @@ impl VideoMemory {
 		outb(0x3D5, 0x20);
 	}
 
-	pub fn form_feed(&mut self) {
+	pub fn form_feed(&self) {
 		self.clear_screen();
 	}
 
-	pub fn nack(&mut self) {
-		let line_start = self.row * COLS;
-		let cursor = line_start + self.col;
+	pub fn nack(&self) {
+		let line_start = unsafe { ROW * COLS };
+		let cursor = unsafe { line_start + COL };
 		for i in line_start..cursor {
 			unsafe {
 				*VIDEO_MEMORY.offset(i as isize) = self.cell(0x20);
 			}
 		}
 
-		self.col = 0;
+		unsafe { COL = 0 };
 		self.set_cursor();
 	}
 
-	pub fn backspace(&mut self) {
-		if self.col > 0 {
-			self.col -= 1;
-			self.set_cursor();
-		}
-
-		let cursor = self.row * COLS + self.col;
+	pub fn backspace(&self) {
 		unsafe {
+			if COL > 0 {
+				COL -= 1;
+				self.set_cursor();
+			}
+
+			let cursor = ROW * COLS + COL;
 			*VIDEO_MEMORY.offset(cursor as isize) = self.cell(0x20);
 		}
 	}
 
-	pub fn start_of_heading(&mut self) {
-		self.col = 0;
+	pub fn start_of_heading(&self) {
+		unsafe { COL = 0 };
 		self.set_cursor();
 	}
 
-	pub fn vertical_tab(&mut self) {
-		let cursor = self.row * COLS + self.col;
-		let eol = (self.row + 1) * COLS;
+	pub fn vertical_tab(&self) {
+		let cursor = unsafe { ROW * COLS + COL };
+		let eol = unsafe { (ROW + 1) * COLS };
 
 		for i in cursor..eol {
 			unsafe {
@@ -127,8 +129,8 @@ impl VideoMemory {
 		}
 	}
 
-	fn set_cursor(&mut self) {
-		let cursor = self.row * COLS + self.col;
+	fn set_cursor(&self) {
+		let cursor = unsafe { ROW * COLS + COL };
 
 		outb(0x3D4, 0x0F);
 		outb(0x3D5, (cursor & 0xFF) as u8);

@@ -30,7 +30,7 @@ use crate::{
 	multiboot::{MultibootFlags, MultibootInfo},
 	serial::COM1,
 	std::vec::Vec,
-	vga::VGA,
+	vga::VideoMemory,
 	x86::common::{inb, outb},
 };
 
@@ -78,10 +78,10 @@ pub extern "C" fn kernel_start(
 		enable_paging();
 	}
 
-	unsafe {
-		VGA.clear_screen();
-		writeln!(VGA, "Welcome to Ivy OS!").unwrap();
-	}
+	let mut vga = VideoMemory::get();
+
+	vga.clear_screen();
+	writeln!(vga, "Welcome to Ivy OS!").unwrap();
 
 	init_idt();
 	init_pic();
