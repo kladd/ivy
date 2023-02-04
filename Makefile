@@ -3,6 +3,9 @@ start_obj := $(target_dir)/start.o
 start_a := $(target_dir)/libstart.a
 kernel := $(target_dir)/ivy
 
+# Append .exe to qemu commands if we're in WSL.
+qemu_exe := "$(shell cat /proc/version | grep -q microsoft && echo ".exe")"
+
 all: $(kernel)
 
 $(target_dir):
@@ -18,7 +21,7 @@ $(kernel): $(start_a) always
 	@cargo build
 
 run: $(kernel)
-	@qemu-system-i386.exe -kernel $< -m 2g -serial stdio -hdb fat:rw:base/
+	@qemu-system-i386$(qemu_exe) -kernel $< -m 2g -serial stdio
 
 always: ;
 
