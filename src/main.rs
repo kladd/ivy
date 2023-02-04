@@ -67,6 +67,7 @@ pub extern "C" fn kernel_start(
 	let boot_info = MultibootInfo::read(multiboot_flags);
 	kdbg!(boot_info);
 
+	init_gdt();
 	unsafe {
 		for i in 0..1024 {
 			PAGE_TABLE_1.0[i] = (i as u32 * 0x1000) | 3;
@@ -82,7 +83,6 @@ pub extern "C" fn kernel_start(
 		writeln!(VGA, "Welcome to Ivy OS!").unwrap();
 	}
 
-	init_gdt();
 	init_idt();
 	init_pic();
 
