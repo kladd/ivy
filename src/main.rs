@@ -5,7 +5,7 @@
 #[macro_use]
 mod debug;
 mod arch;
-mod ide;
+mod fs;
 mod keyboard;
 mod multiboot;
 mod serial;
@@ -20,11 +20,12 @@ use crate::{
 		disable_interrupts, enable_interrupts,
 		global_descriptor_table::init_gdt,
 		halt,
+		ide::ide_init,
 		interrupt_controller::init_pic,
 		interrupt_descriptor_table::{init_idt, InterruptRequest},
 		timer::init_timer,
 	},
-	ide::{ide_init, ide_wait, read_block_1},
+	fs::read_block_1,
 	keyboard::init_keyboard,
 	multiboot::{MultibootFlags, MultibootInfo},
 	serial::COM1,
@@ -110,7 +111,6 @@ pub extern "C" fn kernel_start(
 	}
 
 	dump_register!("cr0");
-	ide_wait();
 	ide_init();
 	read_block_1();
 }
