@@ -21,7 +21,7 @@ $(kernel): $(start_a) always
 	@cargo build
 
 run: $(kernel)
-	@qemu-system-i386$(qemu_exe) -kernel $< -m 2g -serial stdio
+	@qemu-system-i386$(qemu_exe) -kernel $< -m 2g -serial stdio -hda fat:rw:base
 
 always: ;
 
