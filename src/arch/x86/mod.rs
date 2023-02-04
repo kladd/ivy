@@ -1,11 +1,11 @@
 use core::arch::asm;
 
+pub mod clock;
 mod descriptor_table;
 pub mod global_descriptor_table;
 pub mod ide;
 pub mod interrupt_controller;
 pub mod interrupt_descriptor_table;
-pub mod timer;
 
 pub fn enable_interrupts() {
 	unsafe {

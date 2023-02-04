@@ -17,13 +17,13 @@ use core::{arch::asm, fmt::Write, panic::PanicInfo};
 
 use crate::{
 	arch::x86::{
+		clock::init_clock,
 		disable_interrupts, enable_interrupts,
 		global_descriptor_table::init_gdt,
 		halt,
-		ide::ide_init,
+		ide::init_ide,
 		interrupt_controller::init_pic,
 		interrupt_descriptor_table::{init_idt, InterruptRequest},
-		timer::init_timer,
 	},
 	fs::read_block_1,
 	keyboard::init_keyboard,
@@ -86,7 +86,7 @@ pub extern "C" fn kernel_start(
 	init_idt();
 	init_pic();
 
-	init_timer();
+	init_clock();
 	init_keyboard();
 
 	enable_interrupts();
@@ -111,6 +111,6 @@ pub extern "C" fn kernel_start(
 	}
 
 	dump_register!("cr0");
-	ide_init();
+	init_ide();
 	read_block_1();
 }

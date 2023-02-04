@@ -38,7 +38,7 @@ pub fn ide_wait() {
 	kprintf!("IDE: READY");
 }
 
-pub fn ide_init() {
+pub fn init_ide() {
 	register_handler(isr!(46, ide_isr));
 
 	outb(0x1F6, LBA_MODE | lba(1));

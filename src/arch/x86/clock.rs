@@ -10,7 +10,7 @@ static mut CLOCK: u32 = 0;
 
 const FREQ: u32 = 18;
 
-pub fn init_timer() {
+pub fn init_clock() {
 	// Set interval interrupt handler.
 	register_handler(isr!(32, handle_interval_timer));
 }
