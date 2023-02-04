@@ -1,6 +1,6 @@
 use core::{fmt::Write, mem::size_of};
 
-use crate::libk::alloc::kmalloc;
+use crate::std::alloc::kmalloc;
 
 pub struct Vec<T> {
 	start: *mut T,

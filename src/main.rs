@@ -7,9 +7,9 @@ mod debug;
 mod arch;
 mod ide;
 mod keyboard;
-mod libk;
 mod multiboot;
 mod serial;
+mod std;
 mod vga;
 mod x86;
 
@@ -26,9 +26,9 @@ use crate::{
 	},
 	ide::{ide_init, ide_wait, read_block_1},
 	keyboard::init_keyboard,
-	libk::vec::Vec,
 	multiboot::{MultibootFlags, MultibootInfo},
 	serial::COM1,
+	std::vec::Vec,
 	vga::VGA,
 	x86::common::{inb, outb},
 };
