@@ -16,6 +16,10 @@ impl String {
 			vec: Vec::new(capacity),
 		}
 	}
+
+	pub fn from_ascii_own(vec: Vec<u8>) -> Self {
+		Self { vec }
+	}
 }
 
 impl Deref for String {

@@ -1,7 +1,7 @@
 use core::fmt::{Debug, Write};
 
 use crate::{
-	arch::x86::ide::{read_offset, read_sector},
+	arch::x86::ide::{read_offset, read_offset_to_vec, read_sector},
 	std::{string::String, vec::Vec},
 };
 
@@ -112,10 +112,9 @@ impl DirectoryEntry {
 		self.size
 	}
 
-	fn data_sector(&self, bpb: &BIOSParameterBlock) -> u32 {
-		(self.first_cluster_lo as u32 - 2)
-			+ bpb.root_dir_sector()
-			+ bpb.root_dir_sectors() as u32
+	pub fn as_dir(&self, fs: &FATFileSystem) -> Directory {
+		assert!(self.is_dir());
+		Directory::new(fs.device, fs.data_sector_lba(self))
 	}
 }
 
@@ -123,26 +122,6 @@ impl BIOSParameterBlock {
 	fn root_dir_sectors(&self) -> u16 {
 		((self.root_entry_count * 32) + (self.bytes_per_sector - 1))
 			/ self.bytes_per_sector
-	}
-
-	fn total_sectors(&self) -> u32 {
-		if self.total_sectors_16 != 0 {
-			self.total_sectors_16 as u32
-		} else {
-			self.total_sectors_32
-		}
-	}
-
-	fn data_sectors(&self) -> u32 {
-		self.total_sectors()
-			- (self.reserved_sector_count as u32
-				// TODO: fat_sz should be fat_sz_32 if FAT32.
-				+ (self.num_fats as u32 * self.fat_sz_16 as u32)
-				+ self.root_dir_sectors() as u32)
-	}
-
-	fn clusters_count(&self) -> u32 {
-		self.data_sectors() / self.sectors_per_cluster as u32
 	}
 
 	fn root_dir_sector(&self) -> u32 {
@@ -161,59 +140,89 @@ impl Directory {
 		self.entries.get(0)
 	}
 
-	pub fn each<F>(&self, mut f: F)
-	where
-		F: FnMut(&DirectoryEntry),
-	{
-		for i in 1..self.entries.len() {
-			f(self.entries.get(i));
+	pub fn entries(&self) -> &[DirectoryEntry] {
+		&self.entries[1..]
+	}
+
+	fn new(device: u8, lba_sector: u32) -> Self {
+		read_sector(device, lba_sector);
+
+		// "16 directories ought to be enough for anybody."
+		let mut listing = Directory {
+			entries: Vec::new(16),
+		};
+
+		let mut offset = 0;
+		loop {
+			if unsafe { read_offset::<u8>(offset) } == 0 {
+				break;
+			}
+
+			// Commit to the next iteration.
+			let dir_index = offset;
+			offset += DirectoryEntry::SIZE;
+
+			if unsafe { read_offset::<u8>(dir_index + 11) == 0x0F } {
+				// Skip long names for now.
+				continue;
+			}
+
+			let entry = unsafe { read_offset::<DirectoryEntry>(dir_index) };
+			kprintf!("Found directory: {}", entry.name());
+
+			listing.entries.push(entry);
 		}
+
+		listing
 	}
 }
 
-pub fn list_root() -> Directory {
-	// Read MBR.
-	read_sector(0);
+pub struct FATFileSystem {
+	bpb: BIOSParameterBlock,
+	lba_start: u32,
+	device: u8,
+}
 
-	// Read first partition table entry.
-	let partition_0 = unsafe { read_offset::<Partition>(0x1BE) };
-	kdbg!(&partition_0);
+impl FATFileSystem {
+	const MBR_PART_1: u32 = 0x1BE;
 
-	// Read BPB.
-	read_sector(partition_0.lba_start);
+	pub fn open(device: u8) -> Self {
+		read_sector(device, 0);
+		let partition_1 = unsafe { read_offset::<Partition>(Self::MBR_PART_1) };
 
-	let bpb = unsafe { read_offset::<BIOSParameterBlock>(0x0B) };
-	kdbg!(bpb);
-
-	let volume_label = core::str::from_utf8(&bpb.volume_label).unwrap();
-	kdbg!(volume_label);
-
-	// "16 directories ought to be enough for anybody"
-	let mut listing = Directory {
-		entries: Vec::new(16),
-	};
-
-	read_sector(kdbg!(bpb.root_dir_sector() as u32 + partition_0.lba_start));
-	let mut offset = 0;
-	loop {
-		if unsafe { read_offset::<u8>(offset) } == 0 {
-			break;
+		read_sector(device, partition_1.lba_start);
+		Self {
+			bpb: unsafe { read_offset::<BIOSParameterBlock>(0x0B) },
+			lba_start: partition_1.lba_start,
+			device,
 		}
-
-		// Commit to the next iteration.
-		let dir_index = offset;
-		offset += DirectoryEntry::SIZE;
-
-		if unsafe { read_offset::<u8>(dir_index + 11) == 0x0F } {
-			// Skip long names for now.
-			continue;
-		}
-
-		let entry = unsafe { read_offset::<DirectoryEntry>(dir_index) };
-		kprintf!("Found directory: {}", entry.name());
-
-		listing.entries.push(entry);
 	}
 
-	listing
+	pub fn read_dir(&self, entry: &DirectoryEntry) -> Directory {
+		entry.as_dir(self)
+	}
+
+	pub fn read_root(&self) -> Directory {
+		Directory::new(self.device, self.root_dir_sector_lba())
+	}
+
+	pub fn read_file(&self, entry: &DirectoryEntry) -> Vec<u8> {
+		assert!(!entry.is_dir());
+		assert!(entry.size < 512);
+
+		read_sector(self.device, self.data_sector_lba(entry));
+
+		unsafe { read_offset_to_vec(0, entry.size as usize) }
+	}
+
+	fn root_dir_sector_lba(&self) -> u32 {
+		self.bpb.root_dir_sector() + self.lba_start
+	}
+
+	fn data_sector_lba(&self, entry: &DirectoryEntry) -> u32 {
+		((entry.first_cluster_lo as u32 - 2)
+			* self.bpb.sectors_per_cluster as u32)
+			+ self.root_dir_sector_lba()
+			+ self.bpb.root_dir_sectors() as u32
+	}
 }

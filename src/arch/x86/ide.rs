@@ -1,10 +1,11 @@
-use core::fmt::Write;
+use core::{fmt::Write, ptr};
 
 use crate::{
 	arch::x86::interrupt_descriptor_table::{
 		register_handler, InterruptRequest,
 	},
 	isr,
+	std::vec::Vec,
 	x86::common::{inb, insl, outb},
 };
 
@@ -50,13 +51,13 @@ pub fn init_ide() {
 	outb(0x1F6, LBA_MODE | lba(HDA));
 }
 
-pub fn read_sector(sector: u32) {
+pub fn read_sector(device: u8, sector: u32) {
 	ide_wait();
 
 	outb(0x3F6, 0);
 	outb(
 		0x1F6,
-		kdbg!(LBA_MODE | lba(HDA) | (sector >> 24) as u8 & 0x0F),
+		kdbg!(LBA_MODE | lba(device) | (sector >> 24) as u8 & 0x0F),
 	); // 24..28 bits of LBA.
 
 	outb(0x1F2, 0x01); // Number of sectors to read.
@@ -74,6 +75,12 @@ pub unsafe fn read_offset<T: Copy>(offset: u32) -> T {
 	let offset_ptr = &BUFFER as *const [u8; 512] as u32 + offset;
 
 	*(offset_ptr as *const T)
+}
+
+pub unsafe fn read_offset_to_vec(offset: usize, count: usize) -> Vec<u8> {
+	kdbg!(&BUFFER[0..16]);
+	let src = &BUFFER as *const u8;
+	Vec::copy_from_ptr(src.offset(offset as isize), count)
 }
 
 pub fn ide_isr(int: &InterruptRequest) {

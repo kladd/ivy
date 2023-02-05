@@ -1,4 +1,4 @@
-use core::{fmt::Write, mem::size_of, ops::Deref, slice};
+use core::{fmt::Write, mem::size_of, ops::Deref, ptr, slice};
 
 use crate::std::alloc::kmalloc;
 
@@ -38,6 +38,18 @@ impl<T> Vec<T> {
 			panic!("index out of range: {}", i);
 		}
 		unsafe { &*self.start.offset(i as isize) }
+	}
+
+	pub unsafe fn copy_from_ptr(src: *const T, count: usize) -> Self {
+		let vec = Self {
+			start: kdbg!(kmalloc(count * size_of::<T>()) as *mut T),
+			capacity: count,
+			len: count,
+		};
+
+		ptr::copy(src, vec.start, count);
+
+		vec
 	}
 }
 

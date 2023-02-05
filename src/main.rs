@@ -25,10 +25,11 @@ use crate::{
 		interrupt_controller::init_pic,
 		interrupt_descriptor_table::{init_idt, InterruptRequest},
 	},
+	fs::{Directory, DirectoryEntry, FATFileSystem},
 	keyboard::init_keyboard,
 	multiboot::{MultibootFlags, MultibootInfo},
 	serial::COM1,
-	std::vec::Vec,
+	std::{string::String, vec::Vec},
 	vga::VideoMemory,
 	x86::common::{inb, outb},
 };
@@ -112,9 +113,10 @@ pub extern "C" fn kernel_start(
 	dump_register!("cr0");
 	init_ide();
 
-	let root = fs::list_root();
+	let fat_fs = FATFileSystem::open(0);
+
 	writeln!(vga, "\n  Directory of A:\\\n").unwrap();
-	root.each(|entry| {
+	for entry in fat_fs.read_root().entries() {
 		if entry.is_dir() {
 			writeln!(vga, "    {:5} {:8} {:12}", "<DIR>", "", entry.name())
 				.unwrap();
@@ -127,6 +129,14 @@ pub extern "C" fn kernel_start(
 				entry.name()
 			)
 			.unwrap();
+
+			// Also write the file contents to screen.
+			writeln!(
+				vga,
+				"\n{}",
+				String::from_ascii_own(fat_fs.read_file(entry))
+			)
+			.unwrap();
 		}
-	});
+	}
 }
