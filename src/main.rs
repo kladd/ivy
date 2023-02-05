@@ -25,7 +25,6 @@ use crate::{
 		interrupt_controller::init_pic,
 		interrupt_descriptor_table::{init_idt, InterruptRequest},
 	},
-	fs::read_block_1,
 	keyboard::init_keyboard,
 	multiboot::{MultibootFlags, MultibootInfo},
 	serial::COM1,
@@ -112,5 +111,22 @@ pub extern "C" fn kernel_start(
 
 	dump_register!("cr0");
 	init_ide();
-	read_block_1();
+
+	let root = fs::list_root();
+	writeln!(vga, "\n  Directory of A:\\\n").unwrap();
+	root.each(|entry| {
+		if entry.is_dir() {
+			writeln!(vga, "    {:5} {:8} {:12}", "<DIR>", "", entry.name())
+				.unwrap();
+		} else {
+			writeln!(
+				vga,
+				"    {:5} {:8} {:12}",
+				"",
+				entry.size(),
+				entry.name()
+			)
+			.unwrap();
+		}
+	});
 }
