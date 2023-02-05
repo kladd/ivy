@@ -1,4 +1,4 @@
-use core::{fmt::Write, mem::size_of};
+use core::{fmt::Write, mem::size_of, ops::Deref, slice};
 
 use crate::std::alloc::kmalloc;
 
@@ -38,5 +38,13 @@ impl<T> Vec<T> {
 			panic!("index out of range: {}", i);
 		}
 		unsafe { &*self.start.offset(i as isize) }
+	}
+}
+
+impl<T> Deref for Vec<T> {
+	type Target = [T];
+
+	fn deref(&self) -> &Self::Target {
+		unsafe { slice::from_raw_parts(self.start, self.len) }
 	}
 }
