@@ -93,7 +93,7 @@ unsafe extern "C" fn irq_handler() {
 				};
 
 				if c != NUL {
-					write!(vga, "{}", c).unwrap();
+					vga.write_char(c).unwrap()
 				}
 			}
 

@@ -1,4 +1,4 @@
-use core::{fmt::Write, ptr};
+use core::fmt::Write;
 
 use crate::{
 	arch::x86::interrupt_descriptor_table::{

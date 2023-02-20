@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
 #![feature(naked_functions)]
+#![allow(dead_code)]
+#![allow(unused_macros)]
 
 #[macro_use]
 mod debug;
@@ -17,21 +19,16 @@ use core::{arch::asm, fmt::Write, panic::PanicInfo};
 
 use crate::{
 	arch::x86::{
-		clock::init_clock,
-		disable_interrupts, enable_interrupts,
-		global_descriptor_table::init_gdt,
-		halt,
-		ide::init_ide,
-		interrupt_controller::init_pic,
-		interrupt_descriptor_table::{init_idt, InterruptRequest},
+		clock::init_clock, disable_interrupts, enable_interrupts,
+		global_descriptor_table::init_gdt, halt, ide::init_ide,
+		interrupt_controller::init_pic, interrupt_descriptor_table::init_idt,
 	},
-	fs::{Directory, DirectoryEntry, FATFileSystem},
+	fs::FATFileSystem,
 	keyboard::init_keyboard,
 	multiboot::{MultibootFlags, MultibootInfo},
 	serial::COM1,
-	std::{string::String, vec::Vec},
+	std::string::String,
 	vga::VideoMemory,
-	x86::common::{inb, outb},
 };
 
 pub const MULTIBOOT_MAGIC: u32 = 0x2BADB002;
@@ -106,20 +103,14 @@ pub extern "C" fn kernel_start(
 		} else {
 			writeln!(
 				vga,
-				"    {:5} {:8} {:12}",
+				"    {:5} {:8} {:12} {:16}",
 				"",
 				entry.size(),
-				entry.name()
-			)
-			.unwrap();
-
-			// Also write the file contents to screen.
-			writeln!(
-				vga,
-				"\n{}",
+				entry.name(),
 				String::from_ascii_own(fat_fs.read_file(entry))
 			)
 			.unwrap();
 		}
 	}
+	writeln!(vga, "\n{fill:->width$}", fill = "-", width = 80).unwrap();
 }
