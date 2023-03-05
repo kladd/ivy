@@ -40,33 +40,64 @@ _halt:
 
 global enable_paging
 enable_paging:
-    push eax
+	push eax
 
-    mov eax, cr0
-    or eax, 0x80000000
-    mov cr0, eax
+	mov eax, cr0
+	or eax, 0x80000000
+	mov cr0, eax
 
-    pop eax
-    ret
+	pop eax
+	ret
 
 global insl_asm
 insl_asm:
-    push ebp
-    mov ebp, esp
+	push ebp
+	mov ebp, esp
 
-    push ecx
-    push edi
-    push eax
+	push ecx
+	push edi
+	push eax
 
-    mov ecx, [ebp + 16] ; third argument, length in ecx
-    mov edi, [ebp + 12] ; second argument (out) in edi
-    mov dx, [ebp + 8] ; first argument (port) in dx
+	mov ecx, [ebp + 16] ; third argument, length in ecx
+	mov edi, [ebp + 12] ; second argument (out) in edi
+	mov dx, [ebp + 8] ; first argument (port) in dx
 
-    rep insd
+	rep insd
 
-    pop eax
-    pop edi
-    pop ecx
+	pop eax
+	pop edi
+	pop ecx
 
-    pop ebp
-    ret
+	pop ebp
+	ret
+
+;; fn switch_task(task: &Task)
+;; TODO: lol can't switch back
+global switch_task
+switch_task:
+	push ebx
+	push esi
+	push edi
+	push ebp
+
+	mov esi, [esp + 20] ; task
+
+	;; Switch to new task's stack.
+	mov esp, [esi + 4]  ; task.esp
+
+	;; TODO: All tasks use kernel PD right now.
+	;; Switch to new task's page directory.
+	;; mov eax, [esi + 8]  ; task.cr3
+	;; mov cr3, eax
+
+	;; TODO: All tasks are kernel mode right now.
+	;; Update TSS (Ring 3 -> Ring 0)
+	;; mov ebx, [esi + 12] ; task.esp0
+	;; mov esp0 into TSS
+
+	pop ebp
+	pop edi
+	pop esi
+	pop ebx
+
+	ret ;; New task EIP popped from its kernel stack.

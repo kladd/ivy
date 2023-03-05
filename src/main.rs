@@ -10,6 +10,7 @@ mod arch;
 mod fs;
 mod keyboard;
 mod multiboot;
+mod proc;
 mod serial;
 mod std;
 mod vga;
@@ -26,6 +27,7 @@ use crate::{
 	fs::FATFileSystem,
 	keyboard::init_keyboard,
 	multiboot::{MultibootFlags, MultibootInfo},
+	proc::Task,
 	serial::COM1,
 	std::string::String,
 	vga::VideoMemory,
@@ -51,8 +53,36 @@ unsafe fn panic(_info: &PanicInfo) -> ! {
 	halt()
 }
 
+fn list_root() {
+	let mut vga = VideoMemory::get();
+	let fat_fs = FATFileSystem::open(0);
+
+	writeln!(vga, "\n  Directory of A:\\\n").unwrap();
+	for entry in fat_fs.read_root().entries() {
+		if entry.is_dir() {
+			writeln!(vga, "    {:5} {:8} {:12}", "<DIR>", "", entry.name())
+				.unwrap();
+		} else {
+			writeln!(
+				vga,
+				"    {:5} {:8} {:12} {:16}",
+				"",
+				entry.size(),
+				entry.name(),
+				String::from_ascii_own(fat_fs.read_file(entry))
+			)
+			.unwrap();
+		}
+	}
+	writeln!(vga, "\n{fill:->width$}", fill = "-", width = 80).unwrap();
+
+	// TODO: Don't end the world.
+	panic!("There's nowhere to go from here.");
+}
+
 extern "C" {
 	fn enable_paging();
+	fn switch_task(task: &Task) -> u32;
 }
 
 #[no_mangle]
@@ -93,24 +123,8 @@ pub extern "C" fn kernel_start(
 
 	init_ide();
 
-	let fat_fs = FATFileSystem::open(0);
+	let list_fs = Task::new(list_root);
 
-	writeln!(vga, "\n  Directory of A:\\\n").unwrap();
-	for entry in fat_fs.read_root().entries() {
-		if entry.is_dir() {
-			writeln!(vga, "    {:5} {:8} {:12}", "<DIR>", "", entry.name())
-				.unwrap();
-		} else {
-			writeln!(
-				vga,
-				"    {:5} {:8} {:12} {:16}",
-				"",
-				entry.size(),
-				entry.name(),
-				String::from_ascii_own(fat_fs.read_file(entry))
-			)
-			.unwrap();
-		}
-	}
-	writeln!(vga, "\n{fill:->width$}", fill = "-", width = 80).unwrap();
+	kprintf!("switching task");
+	unsafe { switch_task(&list_fs) };
 }
