@@ -50,7 +50,7 @@ static mut PAGE_TABLE_1: PageTable = PageTable([0; 1024]);
 unsafe fn panic(_info: &PanicInfo) -> ! {
 	disable_interrupts();
 	kprintf!("kernel {}", _info);
-	halt()
+	kernel_idle();
 }
 
 fn list_root() {
@@ -75,9 +75,6 @@ fn list_root() {
 		}
 	}
 	writeln!(vga, "\n{fill:->width$}", fill = "-", width = 80).unwrap();
-
-	// TODO: Don't end the world.
-	panic!("There's nowhere to go from here.");
 }
 
 extern "C" {
@@ -123,8 +120,14 @@ pub extern "C" fn kernel_start(
 
 	init_ide();
 
-	let list_fs = Task::new(list_root);
+	let list_fs = Task::new(list_root, kernel_idle);
 
-	kprintf!("switching task");
 	unsafe { switch_task(&list_fs) };
+}
+
+fn kernel_idle() -> ! {
+	kprintf!("IDLE");
+	loop {
+		halt();
+	}
 }

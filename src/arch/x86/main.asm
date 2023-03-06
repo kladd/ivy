@@ -75,10 +75,10 @@ insl_asm:
 ;; TODO: lol can't switch back
 global switch_task
 switch_task:
+	push ebp
 	push ebx
 	push esi
 	push edi
-	push ebp
 
 	mov esi, [esp + 20] ; task
 

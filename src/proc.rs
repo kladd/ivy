@@ -17,38 +17,33 @@ pub struct Task {
 
 #[repr(packed)]
 struct TaskStackFrame {
+	ebp: u32,
 	ebx: u32,
 	esi: u32,
 	edi: u32,
-	ebp: u32,
 	eip: u32,
-}
-
-impl TaskStackFrame {
-	fn new(eip: u32, ebp: u32) -> Self {
-		Self {
-			ebx: 0,
-			esi: 0,
-			edi: 0,
-			ebp,
-			eip,
-		}
-	}
+	ret: u32,
 }
 
 impl Task {
 	const STACK_SIZE: u32 = 0x1000;
 
-	pub fn new(entry: fn()) -> Self {
+	pub fn new(entry: fn(), exit: fn() -> !) -> Self {
 		let stack_bottom = kmalloc_aligned(Self::STACK_SIZE as usize);
 
 		let eip = entry as u32;
 		let ebp = stack_bottom + Self::STACK_SIZE;
 		let esp = ebp - size_of::<TaskStackFrame>() as u32;
-
-		unsafe {
-			*(esp as *mut TaskStackFrame) = TaskStackFrame::new(eip, ebp)
+		let task_stack_frame = TaskStackFrame {
+			ebx: 0,
+			esi: 0,
+			edi: 0,
+			ebp,
+			eip,
+			ret: exit as u32,
 		};
+
+		unsafe { *(esp as *mut TaskStackFrame) = task_stack_frame };
 
 		Task {
 			pid: PID_COUNTER.fetch_add(1, Ordering::SeqCst),

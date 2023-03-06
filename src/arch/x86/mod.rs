@@ -8,18 +8,13 @@ pub mod interrupt_controller;
 pub mod interrupt_descriptor_table;
 
 pub fn enable_interrupts() {
-	unsafe {
-		asm!("sti");
-	}
+	unsafe { asm!("sti") }
 }
 
 pub fn disable_interrupts() {
-	unsafe {
-		asm!("cli");
-	}
+	unsafe { asm!("cli") }
 }
 
-/// x86 HLT instruction.
-pub fn halt() -> ! {
-	unsafe { asm!("hlt", options(noreturn)) }
+pub fn halt() {
+	unsafe { asm!("hlt") }
 }
