@@ -47,16 +47,6 @@ impl SegmentDescriptor {
 	}
 }
 
-// pub fn init_gdt() -> [SegmentDescriptor; SEGMENT_DESCRIPTOR_COUNT] {
-// 	[
-// 		SegmentDescriptor::null(),
-// 		SegmentDescriptor::new(0xFFFFFFFF, 0, 0x9A, 0xCF),
-// 		SegmentDescriptor::new(0xFFFFFFFF, 0, 0x92, 0xCF),
-// 		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xFA, 0xCF),
-// 		SegmentDescriptor::new(0xFFFFFFFF, 0, 0xF2, 0xCF),
-// 	]
-// }
-
 pub fn init_gdt() {
 	unsafe {
 		DESCRIPTOR_TABLE[1] = SegmentDescriptor::new(0xFFFFFFFF, 0, 0x9A, 0xCF);
