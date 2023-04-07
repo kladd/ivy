@@ -120,8 +120,9 @@ fn read_string() -> String {
 			Some(Keycode::VerticalTab) => vga.vertical_tab(),
 			Some(Keycode::Nak) => vga.nak(),
 			Some(Keycode::Backspace) => {
-				s.pop();
-				vga.backspace();
+				if s.pop().is_some() {
+					vga.backspace();
+				}
 			}
 			_ => (),
 		};
