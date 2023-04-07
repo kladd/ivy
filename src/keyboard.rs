@@ -2,7 +2,7 @@ use core::fmt::Write;
 
 use crate::{
 	arch::x86::interrupt_descriptor_table::register_handler,
-	isr,
+	isr, panic,
 	vga::VideoMemory,
 	x86::common::{inb, outb},
 };
@@ -38,6 +38,49 @@ const I8042_KEY_DEPRESSED: u8 = 0x80;
 const STATUS_DATA_AVAILABLE: u8 = 0x1;
 
 static mut MODS: u8 = 0;
+
+#[derive(Copy, Clone)]
+pub enum Keycode {
+	Null,
+	Nak,
+	StartOfHeading,
+	VerticalTab,
+	FormFeed,
+	Backspace,
+	Newline,
+	Char(char),
+}
+
+pub static mut KBD: Keyboard<128> = Keyboard {
+	index: 0,
+	buffer: [Keycode::Null; 128],
+};
+
+pub struct Keyboard<const N: usize> {
+	index: usize,
+	buffer: [Keycode; N],
+}
+
+impl<const N: usize> Keyboard<N> {
+	fn putc(&mut self, c: Keycode) {
+		let next = kdbg!(self.index + 1 % N);
+		if next != 0 {
+			self.buffer[self.index] = c;
+			self.index = next;
+		} else {
+			panic!("Keyboard buffer full");
+		}
+	}
+
+	pub fn getc(&mut self) -> Option<Keycode> {
+		if self.index == 0 {
+			None
+		} else {
+			self.index -= 1;
+			Some(self.buffer[self.index])
+		}
+	}
+}
 
 pub fn init_keyboard() {
 	register_handler(isr!(0x21, irq_handler));
@@ -78,12 +121,13 @@ unsafe extern "C" fn irq_handler() {
 
 			// Control characters. All this will surely not write
 			// straight to vga.
-			0x16 if mod_ctrl() => vga.nack(),
-			0x1E if mod_ctrl() => vga.start_of_heading(),
-			0x25 if mod_ctrl() => vga.vertical_tab(),
-			0x26 if mod_ctrl() => vga.form_feed(),
+			0x16 if mod_ctrl() => KBD.putc(Keycode::Nak),
+			0x1E if mod_ctrl() => KBD.putc(Keycode::StartOfHeading),
+			0x25 if mod_ctrl() => KBD.putc(Keycode::VerticalTab),
+			0x26 if mod_ctrl() => KBD.putc(Keycode::FormFeed),
 
-			0x0E => vga.backspace(),
+			0x0E => KBD.putc(Keycode::Backspace),
+			0x1C => KBD.putc(Keycode::Newline),
 
 			scan_code if is_key_down(scan_code) => {
 				let c = if mod_shift() {
@@ -93,7 +137,7 @@ unsafe extern "C" fn irq_handler() {
 				};
 
 				if c != NUL {
-					vga.write_char(c).unwrap()
+					KBD.putc(Keycode::Char(c))
 				}
 			}
 

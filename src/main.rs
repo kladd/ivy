@@ -12,6 +12,7 @@ mod keyboard;
 mod multiboot;
 mod proc;
 mod serial;
+mod sh;
 mod std;
 mod vga;
 mod x86;
@@ -25,7 +26,7 @@ use crate::{
 		interrupt_controller::init_pic, interrupt_descriptor_table::init_idt,
 	},
 	fs::FATFileSystem,
-	keyboard::init_keyboard,
+	keyboard::{init_keyboard, Keycode, KBD},
 	multiboot::{MultibootFlags, MultibootInfo},
 	proc::Task,
 	serial::COM1,
@@ -50,7 +51,8 @@ static mut PAGE_TABLE_1: PageTable = PageTable([0; 1024]);
 unsafe fn panic(_info: &PanicInfo) -> ! {
 	disable_interrupts();
 	kprintf!("kernel {}", _info);
-	kernel_idle();
+	halt();
+	unreachable!();
 }
 
 fn list_root() {
@@ -120,9 +122,9 @@ pub extern "C" fn kernel_start(
 
 	init_ide();
 
-	let list_fs = Task::new(list_root, kernel_idle);
+	let sh = Task::new(sh::shell_main, kernel_idle);
 
-	unsafe { switch_task(&list_fs) };
+	unsafe { switch_task(&sh) };
 }
 
 fn kernel_idle() -> ! {

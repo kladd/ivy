@@ -78,7 +78,7 @@ impl VideoMemory {
 		}
 	}
 
-	fn insert_newline(&self) -> core::fmt::Result {
+	pub fn insert_newline(&self) -> core::fmt::Result {
 		CARRIER.set_row(CARRIER.row() + 1);
 		CARRIER.set_col(0);
 		self.update_cursor();
@@ -122,7 +122,7 @@ impl VideoMemory {
 		self.clear_screen();
 	}
 
-	pub fn nack(&self) {
+	pub fn nak(&self) {
 		let line_start = CARRIER.row() * COLS;
 		let cursor = line_start + CARRIER.col();
 

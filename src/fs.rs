@@ -114,7 +114,7 @@ impl DirectoryEntry {
 
 	pub fn as_dir(&self, fs: &FATFileSystem) -> Directory {
 		assert!(self.is_dir());
-		Directory::new(fs.device, fs.data_sector_lba(self))
+		Directory::new(self.name(), fs.device, fs.data_sector_lba(self))
 	}
 }
 
@@ -131,10 +131,11 @@ impl BIOSParameterBlock {
 }
 
 pub struct Directory {
+	name: String,
 	entries: Vec<DirectoryEntry>,
 }
 
-// None of this is mean to stay.
+// None of this is meant to stay.
 impl Directory {
 	pub fn root(&self) -> &DirectoryEntry {
 		self.entries.get(0)
@@ -144,11 +145,16 @@ impl Directory {
 		&self.entries[1..]
 	}
 
-	fn new(device: u8, lba_sector: u32) -> Self {
+	pub fn name(&self) -> &str {
+		&self.name
+	}
+
+	fn new(name: String, device: u8, lba_sector: u32) -> Self {
 		read_sector(device, lba_sector);
 
 		// "16 directories ought to be enough for anybody."
 		let mut listing = Directory {
+			name,
 			entries: Vec::new(16),
 		};
 
@@ -203,7 +209,9 @@ impl FATFileSystem {
 	}
 
 	pub fn read_root(&self) -> Directory {
-		Directory::new(self.device, self.root_dir_sector_lba())
+		let mut name = String::new(3);
+		name.write_str("A:\\").unwrap();
+		Directory::new(name, self.device, self.root_dir_sector_lba())
 	}
 
 	pub fn read_file(&self, entry: &DirectoryEntry) -> Vec<u8> {
