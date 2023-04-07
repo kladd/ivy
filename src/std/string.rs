@@ -20,6 +20,10 @@ impl String {
 	pub fn from_ascii_own(vec: Vec<u8>) -> Self {
 		Self { vec }
 	}
+
+	pub fn pop(&mut self) -> Option<u8> {
+		self.vec.pop()
+	}
 }
 
 impl Deref for String {

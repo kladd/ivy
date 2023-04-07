@@ -33,6 +33,15 @@ impl<T> Vec<T> {
 		unsafe { *self.start.offset(i as isize) = item }
 	}
 
+	pub fn pop(&mut self) -> Option<T> {
+		if self.len > 0 {
+			self.len -= 1;
+			unsafe { Some(ptr::read(self.start.offset(self.len as isize))) }
+		} else {
+			None
+		}
+	}
+
 	pub fn get(&self, i: usize) -> &T {
 		if i > self.capacity {
 			panic!("index out of range: {}", i);

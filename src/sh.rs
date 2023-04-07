@@ -4,7 +4,6 @@ use crate::{
 	arch::x86::halt,
 	fs::{Directory, DirectoryEntry, FATFileSystem},
 	keyboard::{Keycode, KBD},
-	panic,
 	std::string::String,
 	vga::VideoMemory,
 };
@@ -118,6 +117,10 @@ fn read_string() -> String {
 			Some(Keycode::FormFeed) => vga.form_feed(),
 			Some(Keycode::VerticalTab) => vga.vertical_tab(),
 			Some(Keycode::Nak) => vga.nak(),
+			Some(Keycode::Backspace) => {
+				s.pop();
+				vga.backspace();
+			}
 			_ => (),
 		};
 		halt();

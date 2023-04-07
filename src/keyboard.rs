@@ -1,9 +1,6 @@
-use core::fmt::Write;
-
 use crate::{
 	arch::x86::interrupt_descriptor_table::register_handler,
-	isr, panic,
-	vga::VideoMemory,
+	isr,
 	x86::common::{inb, outb},
 };
 
@@ -37,7 +34,14 @@ const I8042_KEY_DEPRESSED: u8 = 0x80;
 
 const STATUS_DATA_AVAILABLE: u8 = 0x1;
 
+const BUFFER_SIZE: usize = 16;
+
 static mut MODS: u8 = 0;
+
+pub static mut KBD: Keyboard<BUFFER_SIZE> = Keyboard {
+	index: 0,
+	buffer: [Keycode::Null; BUFFER_SIZE],
+};
 
 #[derive(Copy, Clone)]
 pub enum Keycode {
@@ -51,11 +55,6 @@ pub enum Keycode {
 	Char(char),
 }
 
-pub static mut KBD: Keyboard<128> = Keyboard {
-	index: 0,
-	buffer: [Keycode::Null; 128],
-};
-
 pub struct Keyboard<const N: usize> {
 	index: usize,
 	buffer: [Keycode; N],
@@ -63,12 +62,12 @@ pub struct Keyboard<const N: usize> {
 
 impl<const N: usize> Keyboard<N> {
 	fn putc(&mut self, c: Keycode) {
-		let next = kdbg!(self.index + 1 % N);
+		let next = (self.index + 1) % N;
 		if next != 0 {
 			self.buffer[self.index] = c;
 			self.index = next;
 		} else {
-			panic!("Keyboard buffer full");
+			panic!("Keyboard buffer full!");
 		}
 	}
 
@@ -108,8 +107,6 @@ fn mod_ctrl() -> bool {
 
 unsafe extern "C" fn irq_handler() {
 	while keyboard_has_data() {
-		let mut vga = VideoMemory::get();
-
 		match keyboard_read_scan_code() {
 			0x38 => MODS |= MOD_ALT,
 			0x1D => MODS |= MOD_CTRL,
@@ -119,8 +116,6 @@ unsafe extern "C" fn irq_handler() {
 			0x9D => MODS &= !MOD_CTRL,
 			0xAA => MODS &= !MOD_SHIFT,
 
-			// Control characters. All this will surely not write
-			// straight to vga.
 			0x16 if mod_ctrl() => KBD.putc(Keycode::Nak),
 			0x1E if mod_ctrl() => KBD.putc(Keycode::StartOfHeading),
 			0x25 if mod_ctrl() => KBD.putc(Keycode::VerticalTab),

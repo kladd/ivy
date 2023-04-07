@@ -26,7 +26,7 @@ use crate::{
 		interrupt_controller::init_pic, interrupt_descriptor_table::init_idt,
 	},
 	fs::FATFileSystem,
-	keyboard::{init_keyboard, Keycode, KBD},
+	keyboard::init_keyboard,
 	multiboot::{MultibootFlags, MultibootInfo},
 	proc::Task,
 	serial::COM1,
