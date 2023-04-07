@@ -12,7 +12,7 @@ mod keyboard;
 mod multiboot;
 mod proc;
 mod serial;
-mod sh;
+mod shell;
 mod std;
 mod vga;
 mod x86;
@@ -122,7 +122,7 @@ pub extern "C" fn kernel_start(
 
 	init_ide();
 
-	let sh = Task::new(sh::shell_main, kernel_idle);
+	let sh = Task::new(shell::main, kernel_idle);
 
 	unsafe { switch_task(&sh) };
 }

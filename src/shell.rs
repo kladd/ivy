@@ -8,7 +8,7 @@ use crate::{
 	vga::VideoMemory,
 };
 
-pub fn shell_main() {
+pub fn main() {
 	let mut vga = VideoMemory::get();
 	let fat_fs = FATFileSystem::open(0);
 	let mut cwd = fat_fs.read_root();
