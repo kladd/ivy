@@ -1,7 +1,7 @@
 use core::fmt::Write;
 
 use crate::{
-	arch::x86::halt,
+	arch::x86::{clock::uptime_seconds, halt},
 	fs::{Directory, DirectoryEntry, FATFileSystem},
 	keyboard::{Keycode, KBD},
 	std::string::String,
@@ -45,6 +45,9 @@ pub fn shell_main() {
 					cwd = dir;
 				}
 			}
+			Some("uptime") => {
+				writeln!(vga, "{}", uptime_seconds()).unwrap();
+			}
 			_ => {
 				kprintf!("continuing");
 				continue;
@@ -52,7 +55,6 @@ pub fn shell_main() {
 		}
 		halt();
 	}
-	// String::from_ascii_own(fs.read_file(entry))
 }
 
 fn ls_main(dir: &Directory) {

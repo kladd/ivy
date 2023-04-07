@@ -17,6 +17,11 @@ pub fn init_clock() {
 	register_handler(isr!(32, handle_interval_timer));
 }
 
+pub fn uptime_seconds() -> u32 {
+	// 18.222 (repeating of course), so not accurate here really
+	CLOCK.load(Ordering::Relaxed) / 18
+}
+
 pub extern "C" fn handle_interval_timer(_: &InterruptRequest) {
 	// Send EOI
 	outb(0x20, 0x20);
