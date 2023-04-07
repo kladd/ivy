@@ -34,6 +34,15 @@ impl Carrier {
 		unsafe { (*self.color.get() as u16) << 8 | c as u16 }
 	}
 
+	fn scroll(&self) {
+		for i in COLS..(ROWS * COLS) {
+			unsafe {
+				*VIDEO_MEMORY.offset((i - COLS) as isize) =
+					*VIDEO_MEMORY.offset(i as isize);
+			}
+		}
+	}
+
 	fn row(&self) -> usize {
 		unsafe { *self.row.get() }
 	}
@@ -79,7 +88,13 @@ impl VideoMemory {
 	}
 
 	pub fn insert_newline(&self) -> core::fmt::Result {
-		CARRIER.set_row(CARRIER.row() + 1);
+		if CARRIER.row() == ROWS - 1 {
+			CARRIER.scroll();
+			self.vertical_tab();
+			self.nak();
+		} else {
+			CARRIER.set_row(CARRIER.row() + 1);
+		}
 		CARRIER.set_col(0);
 		self.update_cursor();
 
