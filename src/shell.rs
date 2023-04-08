@@ -14,7 +14,7 @@ pub fn main() {
 	let mut cwd = fat_fs.read_root();
 
 	loop {
-		write!(vga, "# ").unwrap();
+		write!(vga, "@ ").unwrap();
 
 		let line = read_string();
 		let mut tokens = line.split_ascii_whitespace();
