@@ -2,6 +2,7 @@ use core::fmt::Write;
 
 use crate::{
 	arch::x86::{clock::uptime_seconds, halt},
+	ed::ed_main,
 	fs::{Directory, DirectoryEntry, FATFileSystem},
 	keyboard::{Keyboard, KBD},
 	std::{io::Terminal, string::String},
@@ -48,6 +49,7 @@ pub fn main() {
 					cwd = dir;
 				}
 			}
+			Some("ed") => ed_main(&mut terminal, &fat_fs, &cwd),
 			Some("uptime") => {
 				terminal
 					.write_fmt(format_args!("{}\n", uptime_seconds()))

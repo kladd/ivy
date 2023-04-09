@@ -7,6 +7,7 @@
 #[macro_use]
 mod debug;
 mod arch;
+mod ed;
 mod fs;
 mod keyboard;
 mod multiboot;
