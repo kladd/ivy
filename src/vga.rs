@@ -34,15 +34,6 @@ impl Carrier {
 		unsafe { (*self.color.get() as u16) << 8 | c as u16 }
 	}
 
-	fn scroll(&self) {
-		for i in COLS..(ROWS * COLS) {
-			unsafe {
-				*VIDEO_MEMORY.offset((i - COLS) as isize) =
-					*VIDEO_MEMORY.offset(i as isize);
-			}
-		}
-	}
-
 	fn row(&self) -> usize {
 		unsafe { *self.row.get() }
 	}
@@ -89,7 +80,7 @@ impl VideoMemory {
 
 	pub fn insert_newline(&self) -> core::fmt::Result {
 		if CARRIER.row() == ROWS - 1 {
-			CARRIER.scroll();
+			self.scroll();
 			self.vertical_tab();
 			self.nak();
 		} else {
@@ -134,7 +125,22 @@ impl VideoMemory {
 	}
 
 	pub fn form_feed(&self) {
-		self.clear_screen();
+		// Write the cursor line to line 0.
+		for i in 0..COLS as isize {
+			unsafe {
+				*VIDEO_MEMORY.offset(i) =
+					*VIDEO_MEMORY.offset((CARRIER.row() * COLS) as isize + i)
+			}
+		}
+		// Write blank to everything else.
+		for i in COLS as isize..(COLS * ROWS) as isize {
+			unsafe {
+				*VIDEO_MEMORY.offset(i) = CARRIER.cell(0x20);
+			}
+		}
+		// Update the row of the cursor but retain the column.
+		CARRIER.set_row(0);
+		self.update_cursor();
 	}
 
 	pub fn nak(&self) {
@@ -173,6 +179,15 @@ impl VideoMemory {
 		for i in cursor..eol {
 			unsafe {
 				*VIDEO_MEMORY.offset(i as isize) = CARRIER.cell(0x20);
+			}
+		}
+	}
+
+	fn scroll(&self) {
+		for i in COLS..(ROWS * COLS) {
+			unsafe {
+				*VIDEO_MEMORY.offset((i - COLS) as isize) =
+					*VIDEO_MEMORY.offset(i as isize);
 			}
 		}
 	}

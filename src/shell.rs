@@ -3,20 +3,23 @@ use core::fmt::Write;
 use crate::{
 	arch::x86::{clock::uptime_seconds, halt},
 	fs::{Directory, DirectoryEntry, FATFileSystem},
-	keyboard::{Keycode, KBD},
-	std::string::String,
+	keyboard::{Keyboard, KBD},
+	std::{io::Terminal, string::String},
 	vga::VideoMemory,
 };
 
 pub fn main() {
-	let mut vga = VideoMemory::get();
 	let fat_fs = FATFileSystem::open(0);
 	let mut cwd = fat_fs.read_root();
+	let mut terminal = Terminal {
+		kbd: unsafe { &mut KBD },
+		vga: VideoMemory::get(),
+	};
 
 	loop {
-		write!(vga, "@ ").unwrap();
+		terminal.write_str("@ ").unwrap();
 
-		let line = read_string();
+		let line = terminal.read_line();
 		let mut tokens = line.split_ascii_whitespace();
 
 		match tokens.next() {
@@ -28,13 +31,13 @@ pub fn main() {
 					Some(ref dir) => dir,
 					_ => &cwd,
 				};
-				ls_main(dir)
+				ls_main(&mut terminal, dir)
 			}
 			Some("cat") => tokens
 				.next()
 				.and_then(|file_name| find(&cwd, file_name))
 				.map(|entry| {
-					cat_main(&fat_fs, entry);
+					cat_main(&mut terminal, &fat_fs, entry);
 				})
 				.unwrap(),
 			Some("cd") => {
@@ -46,7 +49,9 @@ pub fn main() {
 				}
 			}
 			Some("uptime") => {
-				writeln!(vga, "{}", uptime_seconds()).unwrap();
+				terminal
+					.write_fmt(format_args!("{}\n", uptime_seconds()))
+					.unwrap();
 			}
 			_ => {
 				kprintf!("continuing");
@@ -57,35 +62,32 @@ pub fn main() {
 	}
 }
 
-fn ls_main(dir: &Directory) {
+fn ls_main(term: &mut Terminal, dir: &Directory) {
 	kprintf!("ls_main()");
-	let mut vga = VideoMemory::get();
-
-	writeln!(vga, "\n  Directory of {}\n", dir.name()).unwrap();
 	for entry in dir.entries() {
 		if entry.is_dir() {
-			writeln!(vga, "    {:5} {:8} {:12}", "<DIR>", "", entry.name())
-				.unwrap();
+			term.write_fmt(format_args!(
+				"    {:5} {:8} {:12}\n",
+				"<DIR>",
+				"",
+				entry.name()
+			))
+			.unwrap();
 		} else {
-			writeln!(
-				vga,
-				"    {:5} {:8} {:12}",
+			term.write_fmt(format_args!(
+				"    {:5} {:8} {:12}\n",
 				"",
 				entry.size(),
 				entry.name(),
-			)
+			))
 			.unwrap();
 		}
 	}
 }
 
-fn cat_main(fs: &FATFileSystem, entry: &DirectoryEntry) {
-	writeln!(
-		VideoMemory::get(),
-		"{}",
-		String::from_ascii_own(fs.read_file(entry))
-	)
-	.unwrap();
+fn cat_main(term: &mut Terminal, fs: &FATFileSystem, entry: &DirectoryEntry) {
+	term.write_str(String::from_ascii_own(fs.read_file(entry)).as_ref())
+		.unwrap();
 }
 
 fn find<'a>(dir: &'a Directory, name: &str) -> Option<&'a DirectoryEntry> {
@@ -100,32 +102,4 @@ fn find_dir(
 	name: &str,
 ) -> Option<Directory> {
 	find(dir, name).map(|entry| entry.as_dir(fs))
-}
-
-fn read_string() -> String {
-	let mut vga = VideoMemory::get();
-	let mut s = String::new(80);
-
-	loop {
-		match unsafe { KBD.getc() } {
-			Some(Keycode::Newline) => {
-				vga.insert_newline().unwrap();
-				return kdbg!(s);
-			}
-			Some(Keycode::Char(c)) => {
-				vga.write_char(c).unwrap();
-				s.write_char(c).unwrap();
-			}
-			Some(Keycode::FormFeed) => vga.form_feed(),
-			Some(Keycode::VerticalTab) => vga.vertical_tab(),
-			Some(Keycode::Nak) => vga.nak(),
-			Some(Keycode::Backspace) => {
-				if s.pop().is_some() {
-					vga.backspace();
-				}
-			}
-			_ => (),
-		};
-		halt();
-	}
 }
