@@ -228,9 +228,13 @@ impl FATFileSystem {
 	}
 
 	fn data_sector_lba(&self, entry: &DirectoryEntry) -> u32 {
-		((entry.first_cluster_lo as u32 - 2)
-			* self.bpb.sectors_per_cluster as u32)
-			+ self.root_dir_sector_lba()
-			+ self.bpb.root_dir_sectors() as u32
+		let root_dir_lba = self.root_dir_sector_lba();
+		match entry.first_cluster_lo.checked_sub(2) {
+			Some(first_cluster) => {
+				(first_cluster as u32 * self.bpb.sectors_per_cluster as u32)
+					+ root_dir_lba + self.bpb.root_dir_sectors() as u32
+			}
+			None => root_dir_lba as u32,
+		}
 	}
 }
