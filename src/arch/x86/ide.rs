@@ -1,3 +1,5 @@
+use core::fmt::Write;
+
 use crate::{
 	arch::x86::interrupt_descriptor_table::{
 		register_handler, InterruptRequest,
@@ -26,11 +28,10 @@ fn lba(index: u8) -> u8 {
 }
 
 pub fn ide_wait() {
-	let status = inb(0x1F7) & (IDE_BSY | IDE_DRDY);
-	while status != IDE_DRDY {
-		// wait!
+	while (inb(0x1F7) & (IDE_BSY | IDE_DRDY)) != IDE_DRDY {
+		kprintf!("IDE_WAIT");
 	}
-	if (status & (IDE_DF | IDE_ERR)) != 0 {
+	if ((inb(0x1F7) & (IDE_BSY | IDE_DRDY)) & (IDE_DF | IDE_ERR)) != 0 {
 		panic!("IDE_ERR");
 	}
 }
