@@ -4,7 +4,7 @@ use crate::{
 	arch::x86::{clock::uptime_seconds, halt},
 	ed::ed_main,
 	fs::{Directory, DirectoryEntry, FATFileSystem},
-	keyboard::{Keyboard, KBD},
+	keyboard::KBD,
 	std::{io::Terminal, string::String},
 	vga::VideoMemory,
 };
@@ -32,7 +32,7 @@ pub fn main() {
 					Some(ref dir) => dir,
 					_ => &cwd,
 				};
-				ls_main(&mut terminal, dir)
+				ls_main(&mut terminal, dir);
 			}
 			Some("cat") => tokens
 				.next()
@@ -49,7 +49,7 @@ pub fn main() {
 					cwd = dir;
 				}
 			}
-			Some("ed") => ed_main(&mut terminal, &fat_fs, &cwd),
+			Some("ed") => ed_main(&mut terminal, &fat_fs, &mut cwd),
 			Some("uptime") => {
 				terminal
 					.write_fmt(format_args!("{}\n", uptime_seconds()))
@@ -67,6 +67,9 @@ pub fn main() {
 fn ls_main(term: &mut Terminal, dir: &Directory) {
 	kprintf!("ls_main()");
 	for entry in dir.entries() {
+		if !entry.is_normal() {
+			continue;
+		}
 		if entry.is_dir() {
 			term.write_fmt(format_args!(
 				"    {:5} {:8} {:12}\n",

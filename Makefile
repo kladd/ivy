@@ -11,6 +11,7 @@ all: $(kernel)
 $(target_dir):
 	mkdir -p $@
 
+
 $(start_obj): src/arch/x86/main.asm $(target_dir)
 	nasm -o $@ -felf32 $<
 
@@ -21,7 +22,10 @@ $(kernel): $(start_a) always
 	@cargo build
 
 run: $(kernel)
-	@qemu-system-i386$(qemu_exe) -kernel $< -m 2g -serial stdio -hda fat:rw:base
+	@qemu-system-i386$(qemu_exe) -kernel $< \
+		-m 2g \
+		-serial stdio \
+		-drive file=fat:rw:base,format=raw,cache=writethrough,media=disk
 
 always: ;
 

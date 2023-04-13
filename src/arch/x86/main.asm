@@ -71,6 +71,28 @@ insl_asm:
 	pop ebp
 	ret
 
+global outsl_asm
+outsl_asm:
+	push ebp
+	mov ebp, esp
+
+	push ecx
+	push esi
+	push eax
+
+	mov ecx, [ebp + 16] ; third argument, length in ecx
+	mov esi, [ebp + 12] ; second argument, (in) in edi
+	mov dx, [ebp + 8]   ; first argument (port) in dx.
+
+	rep outsd
+
+	pop eax
+	pop esi
+	pop ecx
+
+	pop ebp
+	ret
+
 ;; fn switch_task(task: &Task)
 ;; TODO: lol can't switch back
 global switch_task

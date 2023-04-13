@@ -6,7 +6,7 @@ use crate::{
 	},
 	isr,
 	std::vec::Vec,
-	x86::common::{inb, insl, outb},
+	x86::common::{inb, insl, outb, outsl},
 };
 
 pub const SECTOR_SIZE: usize = 512;
@@ -16,6 +16,8 @@ const IDE_DRDY: u8 = 0x40;
 const IDE_ERR: u8 = 0x01;
 const IDE_DF: u8 = 0x20;
 const IDE_CMD_READ: u8 = 0x20;
+const IDE_CMD_WRITE: u8 = 0x30;
+const IDE_CMD_FLUSH: u8 = 0xE7;
 
 const LBA_MODE: u8 = 0xE0;
 
@@ -57,7 +59,25 @@ pub fn read_sector(device: u8, sector: u32) {
 
 	outb(0x1F7, IDE_CMD_READ); // Send read command.
 
-	// TODO: Sync.
+	ide_wait();
+}
+
+pub fn write_sector(device: u8, sector: u32, src: u32) {
+	ide_wait();
+
+	outb(0x3F6, 0);
+	outb(0x1F6, LBA_MODE | lba(device) | (sector >> 24) as u8 & 0x0F); // 24..28 bits of LBA.
+
+	outb(0x1F2, 0x01); // Number of sectors to read.
+
+	outb(0x1F3, sector as u8); // 0..8 bits of LBA.
+	outb(0x1F4, (sector >> 8) as u8); // 8..16 bits of LBA.
+	outb(0x1F5, (sector >> 16) as u8); // 16..24 bits of LBA.
+
+	outb(0x1F7, IDE_CMD_WRITE); // Send write command.
+	outsl(0x1F0, src, (SECTOR_SIZE / 4) as u32);
+
+	ide_wait();
 }
 
 pub unsafe fn read_offset<T: Copy>(offset: u32) -> T {
@@ -72,7 +92,6 @@ pub unsafe fn read_offset_to_vec(offset: usize, count: usize) -> Vec<u8> {
 
 pub fn ide_isr(int: &InterruptRequest) {
 	let buf = unsafe { &BUFFER as *const [u8; SECTOR_SIZE] as u32 };
-	ide_wait();
 	insl(0x1F0, buf, (SECTOR_SIZE / 4) as u32);
 
 	int.eoi();

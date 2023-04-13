@@ -1,7 +1,9 @@
 use core::fmt::{Debug, Write};
 
 use crate::{
-	arch::x86::ide::{read_offset, read_offset_to_vec, read_sector},
+	arch::x86::ide::{
+		read_offset, read_offset_to_vec, read_sector, write_sector,
+	},
 	std::{string::String, vec::Vec},
 };
 
@@ -57,7 +59,7 @@ struct BIOSParameterBlock {
 	file_system_type: [u8; 8],
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 #[repr(packed)]
 pub struct DirectoryEntry {
 	name: [u8; 8],
@@ -82,6 +84,7 @@ impl DirectoryEntry {
 	const ATTR_VOLUME_ID: u8 = 0x08;
 	const ATTR_DIRECTORY: u8 = 0x10;
 	const ATTR_ARCHIVE: u8 = 0x20;
+	const ATTR_LFN: u8 = 0x0F;
 
 	const SIZE: u32 = 32;
 
@@ -108,13 +111,45 @@ impl DirectoryEntry {
 		self.attributes & DirectoryEntry::ATTR_DIRECTORY != 0
 	}
 
+	// HACK !!!^^^!!!
+	// Hack to get a file written to disk.
+	pub fn is_normal(&self) -> bool {
+		(self.attributes & DirectoryEntry::ATTR_LFN) != DirectoryEntry::ATTR_LFN
+	}
+
 	pub fn size(&self) -> u32 {
 		self.size
 	}
 
 	pub fn as_dir(&self, fs: &FATFileSystem) -> Directory {
 		assert!(self.is_dir());
-		Directory::new(self.name(), fs.device, fs.data_sector_lba(self))
+		Directory::new(fs.device, fs.data_sector_lba(self))
+	}
+
+	pub fn new(name: &str) -> Self {
+		let mut entry = DirectoryEntry::default();
+		let (mut name, mut ext) = {
+			let mut parts = name.split(".");
+			(
+				parts.next().unwrap().as_bytes().iter(),
+				parts.next().unwrap_or_default().as_bytes().iter(),
+			)
+		};
+
+		entry
+			.name
+			.fill_with(|| name.next().map(|b| b.clone()).unwrap_or(0x20u8));
+		entry.attributes = DirectoryEntry::ATTR_ARCHIVE;
+		entry
+			.ext
+			.fill_with(|| ext.next().map(|b| b.clone()).unwrap_or(0x20u8));
+		entry.m_date = 22155;
+		entry.m_time = 38502;
+		entry.a_date = 22155;
+		entry.c_date = 22155;
+		entry.c_time = 38502;
+
+		entry
 	}
 }
 
@@ -131,7 +166,8 @@ impl BIOSParameterBlock {
 }
 
 pub struct Directory {
-	name: String,
+	device: u8,
+	lba_sector: u32,
 	entries: Vec<DirectoryEntry>,
 }
 
@@ -145,16 +181,13 @@ impl Directory {
 		&self.entries[1..]
 	}
 
-	pub fn name(&self) -> &str {
-		&self.name
-	}
-
-	fn new(name: String, device: u8, lba_sector: u32) -> Self {
+	fn new(device: u8, lba_sector: u32) -> Self {
 		read_sector(device, lba_sector);
 
 		// "16 directories ought to be enough for anybody."
 		let mut listing = Directory {
-			name,
+			device,
+			lba_sector,
 			entries: Vec::new(16),
 		};
 
@@ -168,18 +201,26 @@ impl Directory {
 			let dir_index = offset;
 			offset += DirectoryEntry::SIZE;
 
-			if unsafe { read_offset::<u8>(dir_index + 11) == 0x0F } {
-				// Skip long names for now.
-				continue;
-			}
-
 			let entry = unsafe { read_offset::<DirectoryEntry>(dir_index) };
-			kprintf!("Found directory: {}", entry.name());
-
 			listing.entries.push(entry);
 		}
 
 		listing
+	}
+
+	// HACK
+	pub fn add_entry(&mut self, entry: DirectoryEntry) {
+		self.entries.push(entry);
+		self.flush();
+	}
+
+	// HACK
+	fn flush(&self) {
+		write_sector(
+			self.device,
+			self.lba_sector,
+			self.entries.as_ptr() as u32,
+		);
 	}
 }
 
@@ -191,6 +232,7 @@ pub struct FATFileSystem {
 
 impl FATFileSystem {
 	const MBR_PART_1: u32 = 0x1BE;
+	const END_OF_CHAIN: u16 = 0xFFFF;
 
 	pub fn open(device: u8) -> Self {
 		read_sector(device, 0);
@@ -209,9 +251,7 @@ impl FATFileSystem {
 	}
 
 	pub fn read_root(&self) -> Directory {
-		let mut name = String::new(3);
-		name.write_str("A:\\").unwrap();
-		Directory::new(name, self.device, self.root_dir_sector_lba())
+		Directory::new(self.device, self.root_dir_sector_lba())
 	}
 
 	pub fn read_file(&self, entry: &DirectoryEntry) -> Vec<u8> {
@@ -221,6 +261,21 @@ impl FATFileSystem {
 		read_sector(self.device, self.data_sector_lba(entry));
 
 		unsafe { read_offset_to_vec(0, entry.size as usize) }
+	}
+
+	pub fn write_file(&self, file: &mut DirectoryEntry, data: &[u8]) {
+		if file.first_cluster_lo == 0 {
+			// unsafe cast, TODO: use hi/lo and shift.
+			file.first_cluster_lo = self.alloc_cluster() as u16;
+		}
+		file.size = data.len() as u32;
+
+		let data_sector = self.data_sector_lba(file);
+		write_sector(
+			self.device,
+			data_sector,
+			data as *const [u8] as *const u8 as u32,
+		);
 	}
 
 	fn root_dir_sector_lba(&self) -> u32 {
@@ -236,5 +291,35 @@ impl FATFileSystem {
 			}
 			None => root_dir_lba as u32,
 		}
+	}
+
+	fn read_fat(&self) -> [u16; 32] {
+		read_sector(self.device, self.fat_lba(0));
+		unsafe { read_offset::<_>(0) }
+	}
+
+	fn write_fat(&self, fat: &[u16; 32]) {
+		write_sector(self.device, self.fat_lba(0), fat as *const _ as u32);
+	}
+
+	fn fat_lba(&self, n: u32) -> u32 {
+		self.bpb.reserved_sector_count as u32
+			+ self.lba_start
+			+ (self.bpb.fat_sz_16 as u32 * n)
+	}
+
+	fn alloc_cluster(&self) -> usize {
+		let mut cluster = 0;
+		let mut fat = self.read_fat();
+		for (n, value) in fat.iter_mut().enumerate() {
+			if *value == 0 {
+				*value = Self::END_OF_CHAIN;
+				cluster = n;
+				break;
+			}
+		}
+		assert_ne!(cluster, 0);
+		self.write_fat(&fat);
+		cluster
 	}
 }

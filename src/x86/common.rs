@@ -20,6 +20,11 @@ pub fn insl(port: u16, out: u32, count: u32) {
 	unsafe { insl_asm(port, out, count) }
 }
 
+pub fn outsl(port: u16, src: u32, count: u32) {
+	unsafe { outsl_asm(port, src, count) }
+}
+
 extern "C" {
 	pub fn insl_asm(port: u16, out: u32, count: u32);
+	pub fn outsl_asm(port: u16, src: u32, count: u32);
 }
