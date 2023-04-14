@@ -6,6 +6,7 @@ use crate::{
 	fs::{Directory, DirectoryEntry, FATFileSystem},
 	keyboard::KBD,
 	std::{io::Terminal, string::String},
+	time::DateTime,
 	vga::VideoMemory,
 };
 
@@ -55,6 +56,9 @@ pub fn main() {
 					.write_fmt(format_args!("{}\n", uptime_seconds()))
 					.unwrap();
 			}
+			Some("date") => terminal
+				.write_fmt(format_args!("{}\n", DateTime::now()))
+				.unwrap(),
 			_ => {
 				kprintf!("continuing");
 				continue;

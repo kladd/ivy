@@ -5,10 +5,21 @@ use crate::{
 		register_handler, InterruptRequest,
 	},
 	isr,
-	x86::common::outb,
+	x86::common::{inb, outb},
 };
 
-const FREQ: u32 = 18;
+const PIT_FREQ: u32 = 18;
+
+const RTC_CMD: u16 = 0x70;
+const RTC_DAT: u16 = 0x71;
+
+const RTC_SECOND: u8 = 0x00;
+const RTC_MINUTE: u8 = 0x02;
+const RTC_HOUR: u8 = 0x04;
+const RTC_DAY: u8 = 0x07;
+const RTC_MONTH: u8 = 0x08;
+const RTC_YEAR: u8 = 0x09;
+const RTC_CENTURY: u8 = 0x32;
 
 static CLOCK: AtomicU32 = AtomicU32::new(0);
 
@@ -26,4 +37,39 @@ pub extern "C" fn handle_interval_timer(_: &InterruptRequest) {
 	// Send EOI
 	outb(0x20, 0x20);
 	CLOCK.fetch_add(1, Ordering::Relaxed);
+}
+
+fn rtc(register: u8) -> u8 {
+	outb(RTC_CMD, register);
+	inb(RTC_DAT)
+}
+
+fn bcd_rtc(register: u8) -> u8 {
+	let x = rtc(register);
+	(x & 0x0F) + ((x / 16) * 10)
+}
+
+pub fn year() -> u16 {
+	(bcd_rtc(RTC_CENTURY) as u16 * 100) + bcd_rtc(RTC_YEAR) as u16
+}
+
+pub fn month() -> u8 {
+	bcd_rtc(RTC_MONTH)
+}
+
+pub fn day() -> u8 {
+	bcd_rtc(RTC_DAY)
+}
+
+pub fn hour() -> u8 {
+	let h = rtc(RTC_HOUR);
+	((h & 0x0F) + (((h & 0x70) / 16) * 10)) | (h & 0x80)
+}
+
+pub fn minute() -> u8 {
+	bcd_rtc(RTC_MINUTE)
+}
+
+pub fn second() -> u8 {
+	bcd_rtc(RTC_SECOND)
 }

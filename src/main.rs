@@ -15,6 +15,7 @@ mod proc;
 mod serial;
 mod shell;
 mod std;
+mod time;
 mod vga;
 mod x86;
 
