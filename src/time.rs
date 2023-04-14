@@ -65,6 +65,30 @@ impl DateTime {
 		}
 	}
 
+	pub fn year(&self) -> u16 {
+		self.date.year
+	}
+
+	pub fn month(&self) -> u8 {
+		self.date.month
+	}
+
+	pub fn day(&self) -> u8 {
+		self.date.day
+	}
+
+	pub fn hour(&self) -> u8 {
+		self.time.hour
+	}
+
+	pub fn minute(&self) -> u8 {
+		self.time.minute
+	}
+
+	pub fn second(&self) -> u8 {
+		self.time.second
+	}
+
 	// Keith--Craver method-ish. Sunday is 0.
 	fn day_of_week(&self) -> Day {
 		let mut y = self.date.year;

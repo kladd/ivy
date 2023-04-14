@@ -5,6 +5,7 @@ use crate::{
 		read_offset, read_offset_to_vec, read_sector, write_sector,
 	},
 	std::{string::String, vec::Vec},
+	time::DateTime,
 };
 
 #[derive(Copy, Clone, Debug)]
@@ -143,14 +144,31 @@ impl DirectoryEntry {
 		entry
 			.ext
 			.fill_with(|| ext.next().map(|b| b.clone()).unwrap_or(0x20u8));
-		entry.m_date = 22155;
-		entry.m_time = 38502;
-		entry.a_date = 22155;
-		entry.c_date = 22155;
-		entry.c_time = 38502;
+
+		let now = DateTime::now();
+		let date = as_date(&now);
+		let time = as_time(&now);
+
+		entry.m_date = date;
+		entry.m_time = time;
+		entry.a_date = date;
+		entry.c_date = date;
+		entry.c_time = time;
 
 		entry
 	}
+}
+
+fn as_date(dt: &DateTime) -> u16 {
+	// [15-9](years since 1980), [8-5](month), [4-0](day of month)
+	(dt.year() - 1980) << 9 | (dt.month() as u16) << 5 | dt.day() as u16
+}
+
+fn as_time(dt: &DateTime) -> u16 {
+	// [15-11](hours), [10-5](minutes), [4-0](2-seconds??)
+	(dt.hour() as u16) << 11
+		| (dt.minute() as u16) << 5
+		| (dt.second() / 2) as u16
 }
 
 impl BIOSParameterBlock {
