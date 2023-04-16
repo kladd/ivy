@@ -3,7 +3,8 @@ use core::fmt::Write;
 use crate::{
 	arch::x86::{clock::uptime_seconds, halt},
 	ed::ed_main,
-	fs::{Directory, DirectoryEntry, FATFileSystem},
+	fat::{Directory, DirectoryEntry, FATFileSystem},
+	fs::FileSystem,
 	keyboard::KBD,
 	std::{io::Terminal, string::String},
 	time::DateTime,
@@ -11,8 +12,8 @@ use crate::{
 };
 
 pub fn main() {
-	let fat_fs = FATFileSystem::open(0);
-	let mut cwd = fat_fs.read_root();
+	let fs = FATFileSystem::open(0);
+	let mut cwd = fs.root();
 	let mut terminal = Terminal {
 		kbd: unsafe { &mut KBD },
 		vga: VideoMemory::get(),
@@ -28,29 +29,27 @@ pub fn main() {
 			Some("ls") => {
 				let dir_maybe = tokens
 					.next()
-					.and_then(|dir_name| find_dir(&fat_fs, &cwd, dir_name));
-				let dir = match dir_maybe {
-					Some(ref dir) => dir,
-					_ => &cwd,
-				};
-				ls_main(&mut terminal, dir);
+					.and_then(|path| fs.find_path(Some(cwd), path));
+
+				ls_main(&mut terminal, &fs, &dir_maybe.unwrap_or(cwd));
 			}
 			Some("cat") => tokens
 				.next()
-				.and_then(|file_name| find(&cwd, file_name))
+				.and_then(|file_name| fs.find_path(Some(cwd), file_name))
 				.map(|entry| {
-					cat_main(&mut terminal, &fat_fs, entry);
+					cat_main(&mut terminal, &fs, &entry);
 				})
 				.unwrap(),
 			Some("cd") => {
 				if let Some(dir) = tokens
 					.next()
-					.and_then(|dir_name| find_dir(&fat_fs, &cwd, dir_name))
+					.and_then(|dir_name| fs.find_path(Some(cwd), dir_name))
 				{
 					cwd = dir;
 				}
 			}
-			Some("ed") => ed_main(&mut terminal, &fat_fs, &mut cwd),
+			// TODO: use file pointers instead of `as_dir()`
+			Some("ed") => ed_main(&mut terminal, &fs, &mut cwd.as_dir(&fs)),
 			Some("uptime") => {
 				terminal
 					.write_fmt(format_args!("{}\n", uptime_seconds()))
@@ -68,9 +67,9 @@ pub fn main() {
 	}
 }
 
-fn ls_main(term: &mut Terminal, dir: &Directory) {
-	kprintf!("ls_main()");
-	for entry in dir.entries() {
+fn ls_main(term: &mut Terminal, fs: &FATFileSystem, dir: &DirectoryEntry) {
+	// TODO: ls normal files.
+	for entry in dir.as_dir(fs).entries() {
 		if !entry.is_normal() {
 			continue;
 		}

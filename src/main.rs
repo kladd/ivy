@@ -8,6 +8,7 @@
 mod debug;
 mod arch;
 mod ed;
+mod fat;
 mod fs;
 mod keyboard;
 mod multiboot;
@@ -27,12 +28,10 @@ use crate::{
 		global_descriptor_table::init_gdt, halt, ide::init_ide,
 		interrupt_controller::init_pic, interrupt_descriptor_table::init_idt,
 	},
-	fs::FATFileSystem,
 	keyboard::init_keyboard,
 	multiboot::{MultibootFlags, MultibootInfo},
 	proc::Task,
 	serial::COM1,
-	std::string::String,
 	vga::VideoMemory,
 };
 
@@ -55,30 +54,6 @@ unsafe fn panic(_info: &PanicInfo) -> ! {
 	kprintf!("kernel {}", _info);
 	halt();
 	unreachable!();
-}
-
-fn list_root() {
-	let mut vga = VideoMemory::get();
-	let fat_fs = FATFileSystem::open(0);
-
-	writeln!(vga, "\n  Directory of A:\\\n").unwrap();
-	for entry in fat_fs.read_root().entries() {
-		if entry.is_dir() {
-			writeln!(vga, "    {:5} {:8} {:12}", "<DIR>", "", entry.name())
-				.unwrap();
-		} else {
-			writeln!(
-				vga,
-				"    {:5} {:8} {:12} {:16}",
-				"",
-				entry.size(),
-				entry.name(),
-				String::from_ascii_own(fat_fs.read_file(entry))
-			)
-			.unwrap();
-		}
-	}
-	writeln!(vga, "\n{fill:->width$}", fill = "-", width = 80).unwrap();
 }
 
 extern "C" {

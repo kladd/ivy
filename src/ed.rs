@@ -1,7 +1,7 @@
 use core::fmt::Write;
 
 use crate::{
-	fs::{Directory, DirectoryEntry, FATFileSystem},
+	fat::{Directory, DirectoryEntry, FATFileSystem},
 	std::{io::Terminal, string::String, vec::Vec},
 };
 
