@@ -1,3 +1,4 @@
+use alloc::string::String;
 use core::fmt::Write;
 
 use crate::{
@@ -6,7 +7,7 @@ use crate::{
 	fat::{Directory, DirectoryEntry, FATFileSystem},
 	fs::FileSystem,
 	keyboard::KBD,
-	std::{io::Terminal, string::String},
+	std::io::Terminal,
 	time::DateTime,
 	vga::VideoMemory,
 };
@@ -94,14 +95,15 @@ fn ls_main(term: &mut Terminal, fs: &FATFileSystem, dir: &DirectoryEntry) {
 }
 
 fn cat_main(term: &mut Terminal, fs: &FATFileSystem, entry: &DirectoryEntry) {
-	term.write_str(String::from_ascii_own(fs.read_file(entry)).as_ref())
-		.unwrap();
+	let mut bytes = fs.read_file(entry);
+	let str = unsafe {
+		String::from_raw_parts(bytes.as_mut_ptr(), bytes.len(), bytes.len())
+	};
+	write!(term, "{str}").unwrap();
 }
 
 fn find<'a>(dir: &'a Directory, name: &str) -> Option<&'a DirectoryEntry> {
-	dir.entries()
-		.iter()
-		.find(|entry| entry.name().as_ref() == name)
+	dir.entries().iter().find(|entry| entry.name() == name)
 }
 
 fn find_dir(

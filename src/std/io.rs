@@ -1,9 +1,9 @@
+use alloc::string::String;
 use core::fmt::Write;
 
 use crate::{
 	arch::x86::halt,
 	keyboard::{Keyboard, Keycode},
-	std::string::String,
 	vga::VideoMemory,
 };
 
@@ -17,7 +17,7 @@ pub struct Terminal<'a> {
 
 impl<'a> Terminal<'a> {
 	pub fn read_line(&mut self) -> String {
-		let mut s = String::new(MAX_LINE_LEN);
+		let mut s = String::with_capacity(MAX_LINE_LEN);
 		loop {
 			match self.kbd.getc() {
 				Some(Keycode::Newline) => {

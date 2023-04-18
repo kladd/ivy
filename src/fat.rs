@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use core::fmt::{Debug, Write};
 
 use crate::{
@@ -6,7 +6,6 @@ use crate::{
 		read_offset, read_offset_to_vec, read_sector, write_sector,
 	},
 	fs::{FileSystem, Node},
-	std::string::String,
 	time::DateTime,
 };
 
@@ -100,7 +99,7 @@ impl DirectoryEntry {
 			.split_ascii_whitespace()
 			.next();
 
-		let mut filename = String::new(12);
+		let mut filename = String::with_capacity(12);
 
 		write!(filename, "{}", name).expect("write filename");
 		if let Some(ext) = ext {

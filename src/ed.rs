@@ -1,9 +1,9 @@
-use alloc::vec::Vec;
+use alloc::{format, string::String, vec::Vec};
 use core::fmt::Write;
 
 use crate::{
 	fat::{Directory, DirectoryEntry, FATFileSystem},
-	std::{io::Terminal, string::String},
+	std::io::Terminal,
 };
 
 #[derive(Debug)]
@@ -46,11 +46,7 @@ pub fn ed_main(term: &mut Terminal, fs: &FATFileSystem, cwd: &mut Directory) {
 			},
 			Mode::Append => match line.as_ref() {
 				"." => mode = kdbg!(Mode::Command),
-				_ => {
-					let mut l = String::new(line.len() + 1);
-					l.write_fmt(format_args!("{line}\n")).unwrap();
-					line_buf.push(l);
-				}
+				_ => line_buf.push(format!("{line}\n")),
 			},
 		}
 	}
