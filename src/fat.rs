@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use core::fmt::{Debug, Write};
 
 use crate::{
@@ -5,7 +6,7 @@ use crate::{
 		read_offset, read_offset_to_vec, read_sector, write_sector,
 	},
 	fs::{FileSystem, Node},
-	std::{string::String, vec::Vec},
+	std::string::String,
 	time::DateTime,
 };
 
@@ -191,7 +192,7 @@ pub struct Directory {
 // None of this is meant to stay.
 impl Directory {
 	pub fn root(&self) -> &DirectoryEntry {
-		self.entries.get(0)
+		self.entries.get(0).unwrap()
 	}
 
 	pub fn entries(&self) -> &[DirectoryEntry] {
@@ -205,7 +206,7 @@ impl Directory {
 		let mut listing = Directory {
 			device,
 			lba_sector,
-			entries: Vec::new(16),
+			entries: Vec::with_capacity(16),
 		};
 
 		let mut offset = 0;

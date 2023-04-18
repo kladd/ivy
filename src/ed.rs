@@ -1,8 +1,9 @@
+use alloc::vec::Vec;
 use core::fmt::Write;
 
 use crate::{
 	fat::{Directory, DirectoryEntry, FATFileSystem},
-	std::{io::Terminal, string::String, vec::Vec},
+	std::{io::Terminal, string::String},
 };
 
 #[derive(Debug)]
@@ -13,7 +14,7 @@ enum Mode {
 
 pub fn ed_main(term: &mut Terminal, fs: &FATFileSystem, cwd: &mut Directory) {
 	let mut mode = Mode::Command;
-	let mut line_buf = Vec::new(16);
+	let mut line_buf = Vec::with_capacity(16);
 
 	loop {
 		let line = kdbg!(term.read_line());
@@ -26,7 +27,7 @@ pub fn ed_main(term: &mut Terminal, fs: &FATFileSystem, cwd: &mut Directory) {
 					let name = tokens.next().unwrap().trim();
 					let size = file_size(&line_buf);
 
-					let mut data = Vec::new(size);
+					let mut data = Vec::with_capacity(size);
 					for line in line_buf.iter() {
 						for byte in line.as_bytes() {
 							data.push(*byte);

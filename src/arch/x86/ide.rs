@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use core::fmt::Write;
 
 use crate::{
@@ -5,7 +6,6 @@ use crate::{
 		register_handler, InterruptRequest,
 	},
 	isr,
-	std::vec::Vec,
 	x86::common::{inb, insl, outb, outsl},
 };
 
@@ -87,7 +87,13 @@ pub unsafe fn read_offset<T: Copy>(offset: u32) -> T {
 
 pub unsafe fn read_offset_to_vec(offset: usize, count: usize) -> Vec<u8> {
 	let src = &BUFFER as *const u8;
-	Vec::copy_from_ptr(src.offset(offset as isize), count)
+	unsafe {
+		Vec::from_raw_parts(
+			src.offset(offset as isize) as *mut u8,
+			count,
+			count,
+		)
+	}
 }
 
 pub fn ide_isr(int: &InterruptRequest) {

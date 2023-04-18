@@ -4,6 +4,8 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
+extern crate alloc;
+
 #[macro_use]
 mod debug;
 mod arch;
@@ -32,6 +34,7 @@ use crate::{
 	multiboot::{MultibootFlags, MultibootInfo},
 	proc::Task,
 	serial::COM1,
+	std::alloc::KernelAlloc,
 	vga::VideoMemory,
 };
 
@@ -55,6 +58,9 @@ unsafe fn panic(_info: &PanicInfo) -> ! {
 	halt();
 	unreachable!();
 }
+
+#[global_allocator]
+static GLOBAL: KernelAlloc = KernelAlloc;
 
 extern "C" {
 	fn enable_paging();

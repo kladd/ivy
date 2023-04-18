@@ -1,10 +1,9 @@
+use alloc::vec::Vec;
 use core::{
 	fmt,
 	fmt::{Debug, Display, Formatter, Write},
 	ops::Deref,
 };
-
-use crate::std::vec::Vec;
 
 pub struct String {
 	vec: Vec<u8>,
@@ -13,7 +12,7 @@ pub struct String {
 impl String {
 	pub fn new(capacity: usize) -> Self {
 		Self {
-			vec: Vec::new(capacity),
+			vec: Vec::with_capacity(capacity),
 		}
 	}
 

@@ -8,5 +8,5 @@ rustflags = [
 ]
 
 [unstable]
-build-std = ["core"]
+build-std = ["core", "alloc"]
 unstable-options = true
