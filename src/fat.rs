@@ -359,7 +359,7 @@ impl FileSystem for FATFileSystem {
 		};
 		base.entries
 			.iter()
-			.find(|entry| kdbg!(entry.name()).eq_ignore_ascii_case(name))
+			.find(|entry| kdbg!(entry.name()) == name)
 			.map(DirectoryEntry::clone)
 	}
 }
