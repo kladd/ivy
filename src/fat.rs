@@ -1,11 +1,15 @@
-use alloc::{string::String, vec::Vec};
-use core::fmt::{Debug, Write};
+use alloc::{string::String, vec, vec::Vec};
+use core::{
+	cmp::min,
+	fmt::{Debug, Write},
+	mem,
+	slice::from_raw_parts,
+};
 
 use crate::{
 	arch::x86::ide::{
-		read_offset, read_offset_to_vec, read_sector, write_sector,
+		read, read_offset, read_offset_to_vec, read_sector, write_sector,
 	},
-	fs::{FileSystem, Node},
 	time::DateTime,
 };
 
@@ -79,6 +83,21 @@ pub struct DirectoryEntry {
 	size: u32,
 }
 
+#[derive(Copy, Clone)]
+pub struct DirectoryEntryNode {
+	// Retains the address of `entry` in its parent directory for updating
+	// attributes, etc.
+	dir_sector: u32,
+	cluster_offset: usize,
+	pub entry: DirectoryEntry,
+}
+
+pub struct File<'a> {
+	fs: &'a FATFileSystem,
+	node: &'a mut DirectoryEntryNode,
+	offset: usize,
+}
+
 impl DirectoryEntry {
 	const ATTR_READ_ONLY: u8 = 0x01;
 	const ATTR_HIDDEN: u8 = 0x02;
@@ -118,12 +137,8 @@ impl DirectoryEntry {
 	}
 
 	pub fn is_normal(&self) -> bool {
-		(self.attributes & DirectoryEntry::ATTR_LFN) != DirectoryEntry::ATTR_LFN
-	}
-
-	pub fn as_dir(&self, fs: &FATFileSystem) -> Directory {
-		assert!(self.is_dir());
-		Directory::new(fs.device, fs.data_sector_lba(self))
+		kdbg!((kdbg!(self.attributes) & DirectoryEntry::ATTR_LFN))
+			!= DirectoryEntry::ATTR_LFN
 	}
 
 	pub fn new(name: &str) -> Self {
@@ -156,6 +171,10 @@ impl DirectoryEntry {
 
 		entry
 	}
+
+	fn is_empty(&self) -> bool {
+		self.name[0] == 0
+	}
 }
 
 fn as_date(dt: &DateTime) -> u16 {
@@ -182,65 +201,6 @@ impl BIOSParameterBlock {
 	}
 }
 
-pub struct Directory {
-	device: u8,
-	lba_sector: u32,
-	entries: Vec<DirectoryEntry>,
-}
-
-// None of this is meant to stay.
-impl Directory {
-	pub fn root(&self) -> &DirectoryEntry {
-		self.entries.get(0).unwrap()
-	}
-
-	pub fn entries(&self) -> &[DirectoryEntry] {
-		&self.entries[1..]
-	}
-
-	fn new(device: u8, lba_sector: u32) -> Self {
-		read_sector(device, lba_sector);
-
-		// "16 directories ought to be enough for anybody."
-		let mut listing = Directory {
-			device,
-			lba_sector,
-			entries: Vec::with_capacity(16),
-		};
-
-		let mut offset = 0;
-		loop {
-			if unsafe { read_offset::<u8>(offset) } == 0 {
-				break;
-			}
-
-			// Commit to the next iteration.
-			let dir_index = offset;
-			offset += DirectoryEntry::SIZE;
-
-			let entry = unsafe { read_offset::<DirectoryEntry>(dir_index) };
-			listing.entries.push(entry);
-		}
-
-		listing
-	}
-
-	// HACK
-	pub fn add_entry(&mut self, entry: DirectoryEntry) {
-		self.entries.push(entry);
-		self.flush();
-	}
-
-	// HACK
-	fn flush(&self) {
-		write_sector(
-			self.device,
-			self.lba_sector,
-			self.entries.as_ptr() as u32,
-		);
-	}
-}
-
 pub struct FATFileSystem {
 	bpb: BIOSParameterBlock,
 	lba_start: u32,
@@ -251,9 +211,10 @@ impl FATFileSystem {
 	const MBR_PART_1: u32 = 0x1BE;
 	const END_OF_CHAIN: u16 = 0xFFFF;
 
-	pub fn open(device: u8) -> Self {
+	pub fn new(device: u8) -> Self {
 		read_sector(device, 0);
-		let partition_1 = unsafe { read_offset::<Partition>(Self::MBR_PART_1) };
+		let partition_1 =
+			unsafe { read_offset::<Partition>(Self::MBR_PART_1 as usize) };
 
 		read_sector(device, partition_1.lba_start);
 		Self {
@@ -263,12 +224,14 @@ impl FATFileSystem {
 		}
 	}
 
-	pub fn read_dir(&self, entry: &DirectoryEntry) -> Directory {
-		entry.as_dir(self)
-	}
-
-	pub fn read_root(&self) -> Directory {
-		Directory::new(self.device, self.root_dir_sector_lba())
+	pub fn root(&self) -> DirectoryEntryNode {
+		let mut entry = DirectoryEntry::default();
+		entry.attributes = DirectoryEntry::ATTR_DIRECTORY;
+		DirectoryEntryNode {
+			entry,
+			cluster_offset: 0,
+			dir_sector: 0,
+		}
 	}
 
 	pub fn read_file(&self, entry: &DirectoryEntry) -> Vec<u8> {
@@ -337,29 +300,182 @@ impl FATFileSystem {
 		}
 		assert_ne!(cluster, 0);
 		self.write_fat(&fat);
-		cluster
+		kdbg!(cluster)
+	}
+
+	pub fn open<'a>(&'a self, node: &'a mut DirectoryEntryNode) -> File {
+		kprintf!("OPEN({})", node.entry.name());
+		File {
+			node,
+			fs: self,
+			offset: 0,
+		}
+	}
+
+	pub fn create(
+		&self,
+		cwd: &mut DirectoryEntryNode,
+		name: &str,
+	) -> DirectoryEntryNode {
+		kprintf!("CREATE({name})");
+		let de = DirectoryEntry::new(name);
+		let de_cluster = self.data_sector_lba(&cwd.entry);
+
+		let mut dir = self.open(cwd);
+		let mut buf = [0u8; 512];
+		assert_eq!(dir.read(&mut buf), 512);
+
+		// Write new directory entry into first available entry in `cwd`.
+		let mut entries =
+			unsafe { mem::transmute::<[u8; 512], [DirectoryEntry; 16]>(buf) };
+		let (offset, entry) = entries
+			.iter_mut()
+			.enumerate()
+			.find(|(_, entry)| entry.is_empty())
+			.expect("no available directory entry");
+		*entry = de;
+
+		// Write `cwd`'s entries to disk.
+		dir.seek(0);
+		dir.write(unsafe {
+			from_raw_parts(&entries as *const _ as *const u8, 512)
+		});
+
+		DirectoryEntryNode {
+			dir_sector: de_cluster,
+			cluster_offset: offset,
+			entry: de,
+		}
+	}
+
+	pub fn find(
+		&self,
+		base: &DirectoryEntryNode,
+		path: &str,
+	) -> Option<DirectoryEntryNode> {
+		if path.starts_with("/") {
+			self.find(&self.root(), &path[1..])
+		} else {
+			let segments = path.split("/");
+			let mut node = base.clone();
+
+			for segment in segments {
+				if segment.is_empty() {
+					continue;
+				}
+				node = self.find_child(&mut node, segment)?;
+			}
+
+			Some(node)
+		}
+	}
+
+	fn find_child(
+		&self,
+		base: &mut DirectoryEntryNode,
+		name: &str,
+	) -> Option<DirectoryEntryNode> {
+		assert!(base.entry.is_dir());
+		let mut dir = self.open(base);
+
+		let mut dir_buf = [0u8; DirectoryEntry::SIZE as usize * 16];
+		assert_eq!(dir.read(&mut dir_buf), 512);
+
+		let entries = unsafe {
+			mem::transmute::<[u8; 512], [DirectoryEntry; 16]>(dir_buf)
+		};
+
+		entries
+			.into_iter()
+			.enumerate()
+			.find(|(_, entry)| entry.name() == name)
+			.map(|(offset, entry)| DirectoryEntryNode {
+				entry,
+				cluster_offset: offset,
+				dir_sector: self.data_sector_lba(&base.entry),
+			})
+	}
+
+	fn update(&self, node: &DirectoryEntryNode) {
+		read_sector(self.device, node.dir_sector);
+
+		let mut entries = unsafe { read_offset::<[DirectoryEntry; 16]>(0) };
+		entries[node.cluster_offset] = node.entry;
+
+		write_sector(
+			self.device,
+			node.dir_sector,
+			&entries as *const _ as *const u8 as u32,
+		);
 	}
 }
 
-impl Node for DirectoryEntry {}
-impl FileSystem for FATFileSystem {
-	type Node = DirectoryEntry;
-
-	fn root(&self) -> Self::Node {
-		let mut entry = DirectoryEntry::default();
-		entry.attributes = DirectoryEntry::ATTR_DIRECTORY;
-		entry
+impl<'a> File<'a> {
+	pub fn tell(&self) -> usize {
+		self.offset
 	}
 
-	fn find(&self, base: Option<Self::Node>, name: &str) -> Option<Self::Node> {
-		kprintf!("find: {}", name);
-		let base = match base {
-			Some(entry) => entry.as_dir(self),
-			None => self.read_root(),
+	pub fn seek(&mut self, pos: usize) {
+		self.offset = pos;
+	}
+
+	pub fn read(&mut self, buf: &mut [u8]) -> usize {
+		assert!(self.offset + buf.len() <= 512);
+		read_sector(self.fs.device, self.fs.data_sector_lba(&self.node.entry));
+
+		let count = if self.node.entry.is_dir() {
+			min(512 - self.offset, buf.len())
+		} else {
+			min(self.node.entry.size as usize - self.offset, buf.len())
 		};
-		base.entries
-			.iter()
-			.find(|entry| kdbg!(entry.name()) == name)
-			.map(DirectoryEntry::clone)
+
+		read(self.offset, count, buf);
+		self.offset += count;
+
+		count
+	}
+
+	pub fn write(&mut self, buf: &[u8]) -> usize {
+		// TODO: Write across sector boundaries.
+		assert!(self.offset + buf.len() <= 512);
+
+		if self.node.entry.first_cluster_lo == 0 {
+			self.node.entry.first_cluster_lo = self.fs.alloc_cluster() as u16;
+		}
+
+		if !self.node.entry.is_dir() {
+			self.node.entry.size += buf.len() as u32;
+		}
+
+		read_sector(self.fs.device, self.fs.data_sector_lba(&self.node.entry));
+
+		let size = if self.node.entry.is_dir() {
+			512
+		} else {
+			self.node.entry.size() as usize + buf.len()
+		};
+
+		let mut disk_buf = vec![0u8; size];
+		read(0, size, &mut disk_buf);
+
+		for i in 0..buf.len() {
+			disk_buf[self.offset + i] = buf[i];
+		}
+
+		write_sector(
+			self.fs.device,
+			self.fs.data_sector_lba(&self.node.entry),
+			&buf[..] as *const [u8] as *const u8 as u32,
+		);
+		self.fs.update(self.node);
+
+		buf.len()
+	}
+}
+
+impl<'a> Write for File<'a> {
+	fn write_str(&mut self, s: &str) -> core::fmt::Result {
+		self.write(s.as_bytes());
+		Ok(())
 	}
 }

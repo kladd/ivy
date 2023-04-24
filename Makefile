@@ -33,7 +33,8 @@ run: $(kernel) $(target_dir)/_disk_image
 	@qemu-system-i386$(qemu_exe) -kernel $< \
 		-m 2g \
 		-serial stdio \
-		-drive file=$(target_dir)/_disk_image,format=raw,media=disk
+		-drive file=$(target_dir)/_disk_image,format=raw,media=disk,cache=writethrough
+		# TODO: Disk flush? (remove cache=writethrough)
 
 always: ;
 

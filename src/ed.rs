@@ -2,7 +2,7 @@ use alloc::{format, string::String, vec::Vec};
 use core::fmt::Write;
 
 use crate::{
-	fat::{Directory, DirectoryEntry, FATFileSystem},
+	fat::{DirectoryEntryNode, FATFileSystem},
 	std::io::Terminal,
 };
 
@@ -12,7 +12,11 @@ enum Mode {
 	Append,
 }
 
-pub fn ed_main(term: &mut Terminal, fs: &FATFileSystem, cwd: &mut Directory) {
+pub fn ed_main(
+	term: &mut Terminal,
+	fs: &FATFileSystem,
+	mut cwd: DirectoryEntryNode,
+) {
 	let mut mode = Mode::Command;
 	let mut line_buf = Vec::with_capacity(16);
 
@@ -34,9 +38,14 @@ pub fn ed_main(term: &mut Terminal, fs: &FATFileSystem, cwd: &mut Directory) {
 						}
 					}
 
-					let mut file = DirectoryEntry::new(name);
-					fs.write_file(&mut file, &data);
-					cwd.add_entry(file);
+					let mut node = fs
+						.find(&cwd, name)
+						.unwrap_or_else(|| fs.create(&mut cwd, name));
+
+					assert!(!node.entry.is_dir());
+
+					let mut f = fs.open(&mut node);
+					f.write(&data);
 
 					term.write_fmt(format_args!("{size}\n")).unwrap();
 				}

@@ -80,8 +80,14 @@ pub fn write_sector(device: u8, sector: u32, src: u32) {
 	ide_wait();
 }
 
-pub unsafe fn read_offset<T: Copy>(offset: u32) -> T {
-	let offset_ptr = &BUFFER as *const [u8; 512] as u32 + offset;
+pub fn read(offset: usize, len: usize, buf: &mut [u8]) {
+	for i in 0..len {
+		buf[i] = unsafe { BUFFER[i + offset] }
+	}
+}
+
+pub unsafe fn read_offset<T: Copy>(offset: usize) -> T {
+	let offset_ptr = &BUFFER as *const [u8; 512] as usize + offset;
 	*(offset_ptr as *const T)
 }
 
