@@ -9,13 +9,12 @@ static mut MAX_ADDR: u32 = 0x400000;
 const PAGE_SIZE: u32 = 0x1000;
 
 pub fn kmalloc_aligned(size: usize) -> u32 {
-	align(PAGE_SIZE);
-	kmalloc(size)
+	kmalloc(size, PAGE_SIZE)
 }
 
-pub fn kmalloc(size: usize) -> u32 {
-	align(usize::BITS);
-	unsafe {
+pub fn kmalloc(size: usize, alignment: u32) -> u32 {
+	unsafe { PLACEMENT_ADDR = (PLACEMENT_ADDR & !(alignment - 1)) + alignment };
+	let ptr = unsafe {
 		let placement = PLACEMENT_ADDR;
 		let next_placement = placement + size as u32;
 		kprintf!("alloc(0x{placement:0X}, {size})");
@@ -26,18 +25,16 @@ pub fn kmalloc(size: usize) -> u32 {
 		} else {
 			0
 		}
-	}
-}
+	};
 
-fn align(alignment: u32) {
-	unsafe { PLACEMENT_ADDR = (PLACEMENT_ADDR & !(alignment - 1)) + alignment };
+	ptr
 }
 
 pub struct KernelAlloc;
 
 unsafe impl GlobalAlloc for KernelAlloc {
 	unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-		kmalloc(layout.size()) as *mut u8
+		kmalloc(layout.size(), u32::BITS) as *mut u8
 	}
 
 	unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {

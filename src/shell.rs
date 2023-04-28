@@ -1,19 +1,21 @@
 use alloc::{string::String, vec};
-use core::{cmp::min, fmt::Write, mem::size_of};
+use core::{cmp::min, fmt::Write, mem::size_of, ptr};
 
 use crate::{
 	arch::x86::{clock::uptime_seconds, halt},
 	ed::ed_main,
 	fat::{DirectoryEntry, DirectoryEntryNode, FATFileSystem},
 	keyboard::KBD,
+	proc::Task,
 	std::io::Terminal,
 	time::DateTime,
 	vga::VideoMemory,
 };
 
 pub fn main() {
-	let fs = FATFileSystem::new(0);
-	let mut cwd = fs.find(&fs.root(), "/HOME/USER").unwrap();
+	let task = Task::current();
+	let fs = unsafe { (*task).fs };
+	let mut cwd = unsafe { (*task).cwd };
 	let mut terminal = Terminal {
 		kbd: unsafe { &mut KBD },
 		vga: VideoMemory::get(),
@@ -45,10 +47,12 @@ pub fn main() {
 				if let Some(dir) =
 					tokens.next().and_then(|dir_name| fs.find(&cwd, dir_name))
 				{
-					cwd = dir;
+					unsafe {
+						ptr::replace((*task).cwd as *const _ as *mut _, dir)
+					};
 				}
 			}
-			Some("ed") => ed_main(&mut terminal, &fs, cwd),
+			Some("ed") => ed_main(&mut terminal, &fs, cwd.clone()),
 			Some("uptime") => {
 				terminal
 					.write_fmt(format_args!("{}\n", uptime_seconds()))
@@ -61,7 +65,7 @@ pub fn main() {
 				tokens
 					.next()
 					.filter(|fname| fs.find(&cwd, fname).is_none())
-					.map(|fname| fs.create(&mut cwd, fname));
+					.map(|fname| fs.create(cwd, fname));
 			}
 			_ => {
 				kprintf!("continuing");
@@ -72,11 +76,7 @@ pub fn main() {
 	}
 }
 
-fn ls_main(
-	term: &mut Terminal,
-	fs: &FATFileSystem,
-	node: &mut DirectoryEntryNode,
-) {
+fn ls_main(term: &mut Terminal, fs: &FATFileSystem, node: &DirectoryEntryNode) {
 	if !node.entry.is_dir() {
 		term.write_fmt(format_args!(
 			"    {:5} {:8} {:12}\n",
@@ -88,7 +88,7 @@ fn ls_main(
 		return;
 	}
 
-	let mut dir = fs.open(node);
+	let mut dir = fs.open(*node);
 
 	let mut buf = [0u8; size_of::<DirectoryEntry>()];
 
@@ -133,10 +133,10 @@ fn ls_main(
 fn cat_main(
 	term: &mut Terminal,
 	fs: &FATFileSystem,
-	node: &mut DirectoryEntryNode,
+	node: &DirectoryEntryNode,
 ) {
 	let size = node.entry.size() as usize;
-	let mut f = fs.open(node);
+	let mut f = fs.open(*node);
 	let mut buf = vec![0; min(512, size)];
 
 	f.read(&mut buf);

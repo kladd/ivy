@@ -30,9 +30,10 @@ use crate::{
 		global_descriptor_table::init_gdt, halt, ide::init_ide,
 		interrupt_controller::init_pic, interrupt_descriptor_table::init_idt,
 	},
+	fat::FATFileSystem,
 	keyboard::init_keyboard,
 	multiboot::{MultibootFlags, MultibootInfo},
-	proc::Task,
+	proc::{schedule, Task},
 	serial::COM1,
 	std::alloc::KernelAlloc,
 	vga::VideoMemory,
@@ -105,14 +106,9 @@ pub extern "C" fn kernel_start(
 
 	init_ide();
 
-	let sh = Task::new(shell::main, kernel_idle);
-
-	unsafe { switch_task(&sh) };
-}
-
-fn kernel_idle() -> ! {
-	kprintf!("IDLE");
-	loop {
-		halt();
-	}
+	// Start the shell.
+	let fs = FATFileSystem::new(0);
+	let cwd = fs.find(&fs.root(), "HOME/USER").unwrap();
+	let sh = Task::new(shell::main, &fs, &cwd);
+	schedule(&sh);
 }

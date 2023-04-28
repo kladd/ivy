@@ -38,13 +38,13 @@ pub fn ed_main(
 						}
 					}
 
-					let mut node = fs
+					let node = fs
 						.find(&cwd, name)
 						.unwrap_or_else(|| fs.create(&mut cwd, name));
 
 					assert!(!node.entry.is_dir());
 
-					let mut f = fs.open(&mut node);
+					let mut f = fs.open(node);
 					f.write(&data);
 
 					term.write_fmt(format_args!("{size}\n")).unwrap();

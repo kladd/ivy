@@ -83,7 +83,7 @@ pub struct DirectoryEntry {
 	size: u32,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct DirectoryEntryNode {
 	// Retains the address of `entry` in its parent directory for updating
 	// attributes, etc.
@@ -94,7 +94,7 @@ pub struct DirectoryEntryNode {
 
 pub struct File<'a> {
 	fs: &'a FATFileSystem,
-	node: &'a mut DirectoryEntryNode,
+	node: DirectoryEntryNode,
 	offset: usize,
 }
 
@@ -137,8 +137,7 @@ impl DirectoryEntry {
 	}
 
 	pub fn is_normal(&self) -> bool {
-		kdbg!((kdbg!(self.attributes) & DirectoryEntry::ATTR_LFN))
-			!= DirectoryEntry::ATTR_LFN
+		(self.attributes) & DirectoryEntry::ATTR_LFN != DirectoryEntry::ATTR_LFN
 	}
 
 	pub fn new(name: &str) -> Self {
@@ -201,6 +200,7 @@ impl BIOSParameterBlock {
 	}
 }
 
+#[derive(Debug)]
 pub struct FATFileSystem {
 	bpb: BIOSParameterBlock,
 	lba_start: u32,
@@ -303,7 +303,7 @@ impl FATFileSystem {
 		kdbg!(cluster)
 	}
 
-	pub fn open<'a>(&'a self, node: &'a mut DirectoryEntryNode) -> File {
+	pub fn open(&self, node: DirectoryEntryNode) -> File {
 		kprintf!("OPEN({})", node.entry.name());
 		File {
 			node,
@@ -314,14 +314,14 @@ impl FATFileSystem {
 
 	pub fn create(
 		&self,
-		cwd: &mut DirectoryEntryNode,
+		cwd: &DirectoryEntryNode,
 		name: &str,
 	) -> DirectoryEntryNode {
 		kprintf!("CREATE({name})");
 		let de = DirectoryEntry::new(name);
 		let de_cluster = self.data_sector_lba(&cwd.entry);
 
-		let mut dir = self.open(cwd);
+		let mut dir = self.open(*cwd);
 		let mut buf = [0u8; 512];
 		assert_eq!(dir.read(&mut buf), 512);
 
@@ -363,7 +363,7 @@ impl FATFileSystem {
 				if segment.is_empty() {
 					continue;
 				}
-				node = self.find_child(&mut node, segment)?;
+				node = self.find_child(node, segment)?;
 			}
 
 			Some(node)
@@ -372,7 +372,7 @@ impl FATFileSystem {
 
 	fn find_child(
 		&self,
-		base: &mut DirectoryEntryNode,
+		base: DirectoryEntryNode,
 		name: &str,
 	) -> Option<DirectoryEntryNode> {
 		assert!(base.entry.is_dir());
@@ -467,7 +467,7 @@ impl<'a> File<'a> {
 			self.fs.data_sector_lba(&self.node.entry),
 			&buf[..] as *const [u8] as *const u8 as u32,
 		);
-		self.fs.update(self.node);
+		self.fs.update(&self.node);
 
 		buf.len()
 	}

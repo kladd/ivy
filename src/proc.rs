@@ -1,18 +1,27 @@
 use core::{
+	fmt::Write,
 	mem::size_of,
-	sync::atomic::{AtomicU32, Ordering},
+	sync::atomic::{AtomicPtr, AtomicU32, Ordering},
 };
 
-use crate::std::alloc::kmalloc_aligned;
+use crate::{
+	arch::x86::halt,
+	fat::{DirectoryEntryNode, FATFileSystem},
+	std::alloc::kmalloc_aligned,
+	switch_task,
+};
 
 static PID_COUNTER: AtomicU32 = AtomicU32::new(0);
+static CURRENT_TASK: AtomicPtr<Task> = AtomicPtr::new(0 as *mut Task);
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct Task {
+pub struct Task<'a> {
 	pid: u32,
 	esp: u32,
 	cr3: u32,
+	pub fs: &'a FATFileSystem,
+	pub cwd: &'a DirectoryEntryNode,
 }
 
 #[repr(packed)]
@@ -25,10 +34,14 @@ struct TaskStackFrame {
 	ret: u32,
 }
 
-impl Task {
+impl<'a> Task<'a> {
 	const STACK_SIZE: u32 = 0x1000;
 
-	pub fn new(entry: fn(), exit: fn() -> !) -> Self {
+	pub fn new(
+		entry: fn(),
+		fs: &'a FATFileSystem,
+		cwd: &'a DirectoryEntryNode,
+	) -> Self {
 		let stack_bottom = kmalloc_aligned(Self::STACK_SIZE as usize);
 
 		let eip = entry as u32;
@@ -40,7 +53,7 @@ impl Task {
 			edi: 0,
 			ebp,
 			eip,
-			ret: exit as u32,
+			ret: kernel_idle as u32,
 		};
 
 		unsafe { *(esp as *mut TaskStackFrame) = task_stack_frame };
@@ -50,6 +63,25 @@ impl Task {
 			esp,
 			// TODO: Allocate a new page directory.
 			cr3: 0,
+			fs,
+			cwd,
 		}
+	}
+
+	pub fn current() -> *mut Task<'static> {
+		CURRENT_TASK.load(Ordering::Relaxed)
+	}
+}
+
+pub fn schedule(task: &Task) -> ! {
+	CURRENT_TASK.store(task as *const _ as *mut _, Ordering::Relaxed);
+	unsafe { switch_task(task) };
+	unreachable!();
+}
+
+fn kernel_idle() -> ! {
+	kprintf!("IDLE");
+	loop {
+		halt();
 	}
 }
