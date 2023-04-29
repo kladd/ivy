@@ -1,24 +1,18 @@
-use alloc::{string::String, vec};
-use core::{cmp::min, fmt::Write, mem::size_of, ptr};
+use alloc::{format, vec};
+use core::{cmp::min, fmt::Write, mem::size_of};
 
 use crate::{
 	arch::x86::{clock::uptime_seconds, halt},
 	ed::ed_main,
-	fat::{DirectoryEntry, DirectoryEntryNode, FATFileSystem},
-	keyboard::KBD,
+	fat::DirectoryEntry,
+	fs::{create, open, read, write, File},
 	proc::Task,
-	std::io::Terminal,
 	time::DateTime,
-	vga::VideoMemory,
 };
 
 pub fn main() {
-	let task = Task::current();
-	let fs = unsafe { (*task).fs };
-	let mut cwd = unsafe { (*task).cwd };
-	let mut terminal = Terminal {
-		kbd: unsafe { &mut KBD },
-		vga: VideoMemory::get(),
+	let File::Terminal(mut terminal) = open("CONS").unwrap() else {
+		panic!("Failed to open console device")
 	};
 
 	loop {
@@ -28,31 +22,18 @@ pub fn main() {
 		let mut tokens = line.split_ascii_whitespace();
 
 		match tokens.next() {
-			Some("ls") => {
-				match tokens.next().and_then(|path| fs.find(&cwd, path)) {
-					Some(mut node) => ls_main(&mut terminal, &fs, &mut node),
-					_ => ls_main(&mut terminal, &fs, &mut cwd),
-				};
-			}
+			Some("ls") => ls_main(tokens.next()),
 			Some("cat") => {
-				let file_maybe = tokens
-					.next()
-					.and_then(|file_name| fs.find(&cwd, file_name));
-				match file_maybe {
-					Some(mut f) => cat_main(&mut terminal, &fs, &mut f),
-					None => continue,
-				};
-			}
-			Some("cd") => {
-				if let Some(dir) =
-					tokens.next().and_then(|dir_name| fs.find(&cwd, dir_name))
-				{
-					unsafe {
-						ptr::replace((*task).cwd as *const _ as *mut _, dir)
-					};
+				if let Some(path) = tokens.next() {
+					cat_main(path)
 				}
 			}
-			Some("ed") => ed_main(&mut terminal, &fs, cwd.clone()),
+			Some("cd") => {
+				if let Some(dir) = tokens.next().and_then(open) {
+					unsafe { (*Task::current()).chdir(&dir) }
+				}
+			}
+			Some("ed") => ed_main(),
 			Some("uptime") => {
 				terminal
 					.write_fmt(format_args!("{}\n", uptime_seconds()))
@@ -64,8 +45,8 @@ pub fn main() {
 			Some("touch") => {
 				tokens
 					.next()
-					.filter(|fname| fs.find(&cwd, fname).is_none())
-					.map(|fname| fs.create(cwd, fname));
+					.filter(|fname| open(fname).is_none())
+					.map(create);
 			}
 			_ => {
 				kprintf!("continuing");
@@ -76,27 +57,33 @@ pub fn main() {
 	}
 }
 
-fn ls_main(term: &mut Terminal, fs: &FATFileSystem, node: &DirectoryEntryNode) {
-	if !node.entry.is_dir() {
-		term.write_fmt(format_args!(
-			"    {:5} {:8} {:12}\n",
-			"",
-			node.entry.size(),
-			node.entry.name(),
-		))
-		.unwrap();
+fn ls_main(path: Option<&str>) {
+	let mut term = open("CONS").unwrap();
+
+	let mut f = match path {
+		Some(p) => {
+			if let Some(f) = open(p) {
+				f
+			} else {
+				return;
+			}
+		}
+		None => open(".").unwrap(),
+	};
+
+	if let File::File(file) = f {
+		write(
+			&mut term,
+			format!("    {:5} {:8} {:12}\n", "", file.size(), file.name(),)
+				.as_bytes(),
+		);
 		return;
 	}
 
-	let mut dir = fs.open(*node);
-
 	let mut buf = [0u8; size_of::<DirectoryEntry>()];
 
-	// The first entry is this directory, consume it.
-	dir.read(&mut buf);
-
 	// Now list the contents of this directory.
-	while dir.read(&mut buf) != 0 {
+	while read(&mut f, &mut buf) != 0 {
 		// Listing is complete when byte[0] is 0.
 		if buf[0] == 0 {
 			break;
@@ -111,35 +98,30 @@ fn ls_main(term: &mut Terminal, fs: &FATFileSystem, node: &DirectoryEntryNode) {
 		}
 
 		if de.is_dir() {
-			term.write_fmt(format_args!(
-				"    {:5} {:8} {:12}\n",
-				"<DIR>",
-				"",
-				de.name()
-			))
-			.unwrap();
+			write(
+				&mut term,
+				format!("    {:5} {:8} {:12}\n", "<DIR>", "", de.name())
+					.as_bytes(),
+			);
 		} else {
-			term.write_fmt(format_args!(
-				"    {:5} {:8} {:12}\n",
-				"",
-				de.size(),
-				de.name(),
-			))
-			.unwrap();
+			write(
+				&mut term,
+				format!("    {:5} {:8} {:12}\n", "", de.size(), de.name())
+					.as_bytes(),
+			);
 		}
 	}
 }
 
-fn cat_main(
-	term: &mut Terminal,
-	fs: &FATFileSystem,
-	node: &DirectoryEntryNode,
-) {
-	let size = node.entry.size() as usize;
-	let mut f = fs.open(*node);
-	let mut buf = vec![0; min(512, size)];
+fn cat_main(path: &str) {
+	match open(path) {
+		Some(File::File(f)) => {
+			let mut term = open("CONS").unwrap();
+			let mut buf = vec![0; min(512, f.size())];
 
-	f.read(&mut buf);
-
-	write!(term, "{}", unsafe { String::from_utf8_unchecked(buf) }).unwrap();
+			read(&mut File::File(f), &mut buf);
+			write(&mut term, &buf);
+		}
+		Some(_) | None => (),
+	}
 }

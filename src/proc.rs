@@ -1,12 +1,14 @@
 use core::{
 	fmt::Write,
 	mem::size_of,
+	ptr,
 	sync::atomic::{AtomicPtr, AtomicU32, Ordering},
 };
 
 use crate::{
 	arch::x86::halt,
 	fat::{DirectoryEntryNode, FATFileSystem},
+	fs::File,
 	std::alloc::kmalloc_aligned,
 	switch_task,
 };
@@ -70,6 +72,18 @@ impl<'a> Task<'a> {
 
 	pub fn current() -> *mut Task<'static> {
 		CURRENT_TASK.load(Ordering::Relaxed)
+	}
+
+	pub fn chdir(&self, f: &File) {
+		match f {
+			File::Directory(f) => unsafe {
+				ptr::replace::<DirectoryEntryNode>(
+					self.cwd as *const _ as *mut _,
+					f.entry(),
+				);
+			},
+			_ => return,
+		}
 	}
 }
 

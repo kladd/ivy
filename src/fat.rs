@@ -471,6 +471,18 @@ impl<'a> File<'a> {
 
 		buf.len()
 	}
+
+	pub fn size(&self) -> usize {
+		self.node.entry.size as usize
+	}
+
+	pub fn name(&self) -> String {
+		self.node.entry.name()
+	}
+
+	pub fn entry(&self) -> DirectoryEntryNode {
+		self.node
+	}
 }
 
 impl<'a> Write for File<'a> {
