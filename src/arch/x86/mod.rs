@@ -6,6 +6,7 @@ pub mod global_descriptor_table;
 pub mod ide;
 pub mod interrupt_controller;
 pub mod interrupt_descriptor_table;
+pub mod virtual_memory;
 
 pub fn enable_interrupts() {
 	unsafe { asm!("sti") }
