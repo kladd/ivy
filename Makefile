@@ -29,11 +29,11 @@ $(target_dir)/_disk_image: $(kernel)
 	sudo cp -r base/* $(target_dir)/mnt
 	sudo umount $(target_dir)/mnt
 
-run: $(kernel) $(target_dir)/_disk_image
+run: $(kernel)
 	@qemu-system-i386$(qemu_exe) -kernel $< \
 		-m 2g \
 		-serial stdio \
-		-drive file=$(target_dir)/_disk_image,format=raw,media=disk,cache=writethrough
+		-drive file=fat:rw:base,format=raw,media=disk,cache=writethrough
 		# TODO: Disk flush? (remove cache=writethrough)
 
 always: ;
