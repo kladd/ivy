@@ -1,6 +1,6 @@
 use core::{cell::UnsafeCell, fmt::Write};
 
-use crate::x86::common::outb;
+use crate::arch::x86::outb;
 
 const VIDEO_MEMORY: *mut u16 = 0xB8000 as *mut u16;
 const ROWS: usize = 25;

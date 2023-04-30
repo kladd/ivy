@@ -1,11 +1,12 @@
 use core::sync::atomic::{AtomicU32, Ordering};
 
 use crate::{
-	arch::x86::interrupt_descriptor_table::{
-		register_handler, InterruptRequest,
+	arch::x86::{
+		inb,
+		interrupt_descriptor_table::{register_handler, InterruptRequest},
+		outb,
 	},
 	isr,
-	x86::common::{inb, outb},
 };
 
 const PIT_FREQ: u32 = 18;

@@ -1,4 +1,4 @@
-use crate::x86::common::{inb, outb};
+use crate::arch::x86::{inb, outb};
 
 const PIC1: u16 = 0x20;
 const PIC1_CMD: u16 = PIC1;

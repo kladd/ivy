@@ -1,6 +1,6 @@
 use core::cell::Cell;
 
-use crate::x86::common::outb;
+use crate::arch::x86::outb;
 
 pub const COM1: SerialPort = SerialPort {
 	port: 0x3F8 as *mut u8,

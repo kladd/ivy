@@ -1,8 +1,6 @@
 use core::arch::asm;
 
-use crate::{
-	arch::x86::descriptor_table::DescriptorTableRegister, x86::common::outb,
-};
+use crate::arch::x86::{descriptor_table::DescriptorTableRegister, outb};
 
 const MAX_INTERRUPTS: usize = 256;
 

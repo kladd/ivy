@@ -20,7 +20,6 @@ mod shell;
 mod std;
 mod time;
 mod vga;
-mod x86;
 
 use core::{arch::asm, fmt::Write, panic::PanicInfo};
 

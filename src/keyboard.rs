@@ -1,7 +1,6 @@
 use crate::{
-	arch::x86::interrupt_descriptor_table::register_handler,
+	arch::x86::{inb, interrupt_descriptor_table::register_handler, outb},
 	isr,
-	x86::common::{inb, outb},
 };
 
 const NUL: char = 0 as char;

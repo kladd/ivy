@@ -2,11 +2,12 @@ use alloc::vec::Vec;
 use core::fmt::Write;
 
 use crate::{
-	arch::x86::interrupt_descriptor_table::{
-		register_handler, InterruptRequest,
+	arch::x86::{
+		inb, insl,
+		interrupt_descriptor_table::{register_handler, InterruptRequest},
+		outb, outsl,
 	},
 	isr,
-	x86::common::{inb, insl, outb, outsl},
 };
 
 pub const SECTOR_SIZE: usize = 512;
