@@ -64,7 +64,6 @@ static GLOBAL: KernelAlloc = KernelAlloc;
 
 extern "C" {
 	fn enable_paging();
-	fn switch_task(task: &Task) -> u32;
 }
 
 #[no_mangle]

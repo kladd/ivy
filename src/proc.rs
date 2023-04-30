@@ -10,7 +10,6 @@ use crate::{
 	fat::{DirectoryEntryNode, FATFileSystem},
 	fs::File,
 	std::alloc::kmalloc_aligned,
-	switch_task,
 };
 
 static PID_COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -91,6 +90,11 @@ pub fn schedule(task: &Task) -> ! {
 	CURRENT_TASK.store(task as *const _ as *mut _, Ordering::Relaxed);
 	unsafe { switch_task(task) };
 	unreachable!();
+}
+
+extern "C" {
+	#[allow(improper_ctypes)]
+	fn switch_task(task: &Task) -> u32;
 }
 
 fn kernel_idle() -> ! {
