@@ -96,6 +96,7 @@ pub struct File<'a> {
 	fs: &'a FATFileSystem,
 	node: DirectoryEntryNode,
 	offset: usize,
+	buffer: Option<[u8; 512]>,
 }
 
 impl DirectoryEntry {
@@ -317,6 +318,7 @@ impl FATFileSystem {
 			node,
 			fs: self,
 			offset: 0,
+			buffer: None,
 		}
 	}
 
@@ -429,7 +431,14 @@ impl<'a> File<'a> {
 
 	pub fn read(&mut self, buf: &mut [u8]) -> usize {
 		assert!(self.offset + buf.len() <= 512);
-		read_sector(self.fs.device, self.fs.data_sector_lba(&self.node.entry));
+
+		if self.buffer.is_none() {
+			read_sector(
+				self.fs.device,
+				self.fs.data_sector_lba(&self.node.entry),
+			);
+			read(0, self.size(), self.buffer.insert([0u8; 512]));
+		}
 
 		let count = if self.node.entry.is_dir() {
 			min(512 - self.offset, buf.len())
@@ -437,7 +446,10 @@ impl<'a> File<'a> {
 			min(self.node.entry.size as usize - self.offset, buf.len())
 		};
 
-		read(self.offset, count, buf);
+		buf[..count].clone_from_slice(
+			&self.buffer.unwrap()[self.offset..self.offset + count],
+		);
+
 		self.offset += count;
 
 		count
@@ -481,7 +493,11 @@ impl<'a> File<'a> {
 	}
 
 	pub fn size(&self) -> usize {
-		self.node.entry.size as usize
+		if self.node.entry.is_dir() {
+			512
+		} else {
+			self.node.entry.size as usize
+		}
 	}
 
 	pub fn name(&self) -> String {
