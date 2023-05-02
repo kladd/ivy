@@ -1,5 +1,4 @@
 use alloc::vec::Vec;
-use core::fmt::Write;
 
 use crate::{
 	arch::x86::{
@@ -31,9 +30,7 @@ fn lba(index: u8) -> u8 {
 }
 
 pub fn ide_wait() {
-	while (inb(0x1F7) & (IDE_BSY | IDE_DRDY)) != IDE_DRDY {
-		kprintf!("IDE_WAIT");
-	}
+	while (inb(0x1F7) & (IDE_BSY | IDE_DRDY)) != IDE_DRDY { /* SPIN WAIT */ }
 	if ((inb(0x1F7) & (IDE_BSY | IDE_DRDY)) & (IDE_DF | IDE_ERR)) != 0 {
 		panic!("IDE_ERR");
 	}

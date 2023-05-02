@@ -1,5 +1,4 @@
 use alloc::{format, string::String, vec::Vec};
-use core::fmt::Write;
 
 use crate::fs::{create, open, read_line, write, File};
 

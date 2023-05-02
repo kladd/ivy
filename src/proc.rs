@@ -1,9 +1,10 @@
 use core::{
-	fmt::Write,
 	mem::size_of,
 	ptr,
 	sync::atomic::{AtomicPtr, AtomicU32, Ordering},
 };
+
+use log::info;
 
 use crate::{
 	arch::x86::halt,
@@ -98,7 +99,7 @@ extern "C" {
 }
 
 fn kernel_idle() -> ! {
-	kprintf!("IDLE");
+	info!("IDLE");
 	loop {
 		halt();
 	}

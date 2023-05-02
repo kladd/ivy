@@ -1,7 +1,6 @@
-use core::{
-	alloc::{GlobalAlloc, Layout},
-	fmt::Write,
-};
+use core::alloc::{GlobalAlloc, Layout};
+
+use log::trace;
 
 static mut PLACEMENT_ADDR: u32 = 0x200000;
 static mut MAX_ADDR: u32 = 0x400000;
@@ -17,7 +16,7 @@ pub fn kmalloc(size: usize, alignment: u32) -> u32 {
 	let ptr = unsafe {
 		let placement = PLACEMENT_ADDR;
 		let next_placement = placement + size as u32;
-		kprintf!("alloc(0x{placement:0X}, {size})");
+		trace!("alloc(0x{placement:0X}, {size})");
 
 		if next_placement < MAX_ADDR {
 			PLACEMENT_ADDR = next_placement;
@@ -38,6 +37,6 @@ unsafe impl GlobalAlloc for KernelAlloc {
 	}
 
 	unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
-		kprintf!("leak(0x{:08X})", ptr as usize);
+		trace!("leak(0x{:08X})", ptr as usize);
 	}
 }

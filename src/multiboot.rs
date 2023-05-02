@@ -1,4 +1,4 @@
-use core::fmt::Write;
+use log::debug;
 
 const MEM_INFO_FLAG: u32 = 0x1;
 
@@ -15,7 +15,7 @@ pub struct MultibootInfo {
 
 impl MultibootInfo {
 	pub fn read(flags: &MultibootFlags) -> Self {
-		kprintf!("multiboot_flags = {:032b}", flags.0);
+		debug!("multiboot_flags = {:032b}", flags.0);
 		assert_ne!(flags.0 & MEM_INFO_FLAG, 0);
 
 		let base_ptr = flags as *const MultibootFlags as *const u32;

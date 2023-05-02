@@ -3,6 +3,7 @@ start_obj := $(target_dir)/start.o
 start_a := $(target_dir)/libstart.a
 kernel := $(target_dir)/ivy
 disk_size := 1g
+log_level := debug
 
 # Append .exe to qemu commands if we're in WSL.
 qemu_exe := "$(shell cat /proc/version | grep -q microsoft && echo ".exe")"
@@ -19,7 +20,7 @@ $(start_a): $(start_obj)
 	ar rvs $@ $^
 
 $(kernel): $(start_a) always
-	@cargo build
+	cargo build --features log/max_level_$(log_level)
 
 $(target_dir)/_disk_image: $(kernel)
 	qemu-img$(qemu_exe) create -f raw $@ $(disk_size)
@@ -34,7 +35,6 @@ run: $(kernel)
 		-m 2g \
 		-serial stdio \
 		-drive file=fat:rw:base,format=raw,media=disk,cache=writethrough
-		# TODO: Disk flush? (remove cache=writethrough)
 
 always: ;
 

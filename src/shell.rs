@@ -1,6 +1,8 @@
 use alloc::{format, vec};
 use core::{cmp::min, fmt::Write};
 
+use log::trace;
+
 use crate::{
 	arch::x86::{clock::uptime_seconds, halt},
 	ed::ed_main,
@@ -48,7 +50,7 @@ pub fn main() {
 					.map(create);
 			}
 			_ => {
-				kprintf!("continuing");
+				trace!("continuing");
 				continue;
 			}
 		}

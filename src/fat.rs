@@ -6,6 +6,8 @@ use core::{
 	slice::from_raw_parts,
 };
 
+use log::{info, trace};
+
 use crate::{
 	arch::x86::ide::{
 		read, read_offset, read_offset_to_vec, read_sector, write_sector,
@@ -309,11 +311,12 @@ impl FATFileSystem {
 		}
 		assert_ne!(cluster, 0);
 		self.write_fat(&fat);
-		kdbg!(cluster)
+		info!("Allocate cluster {cluster:?}");
+		cluster
 	}
 
 	pub fn open(&self, node: DirectoryEntryNode) -> File {
-		kprintf!("OPEN({})", node.entry.name());
+		trace!("OPEN({})", node.entry.name());
 		File {
 			node,
 			fs: self,
@@ -327,7 +330,7 @@ impl FATFileSystem {
 		cwd: &DirectoryEntryNode,
 		name: &str,
 	) -> DirectoryEntryNode {
-		kprintf!("CREATE({name})");
+		trace!("CREATE({name})");
 		let de = DirectoryEntry::new(name);
 		let de_cluster = self.data_sector_lba(&cwd.entry);
 
