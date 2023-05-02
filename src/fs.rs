@@ -1,7 +1,10 @@
 use alloc::string::String;
-use core::{cmp::min, fmt::Write};
+use core::{cmp::min, fmt::Write, mem::size_of, slice};
 
-use crate::{fat, keyboard::KBD, proc::Task, std::io, vga::VideoMemory};
+use crate::{
+	fat, fat::DirectoryEntry, keyboard::KBD, proc::Task, std::io,
+	vga::VideoMemory,
+};
 
 pub enum File<'a> {
 	Directory(fat::File<'a>),
@@ -54,6 +57,22 @@ pub fn read(f: &mut File, buf: &mut [u8]) -> usize {
 			n
 		}
 	}
+}
+
+pub fn readdir(f: &mut File) -> Option<DirectoryEntry> {
+	let dir_entry_size = size_of::<DirectoryEntry>();
+
+	let dir_entry = DirectoryEntry::default();
+	let dir_entry_buf = unsafe {
+		slice::from_raw_parts_mut(
+			&dir_entry as *const _ as *mut u8,
+			dir_entry_size,
+		)
+	};
+
+	assert_eq!(read(f, dir_entry_buf), dir_entry_size);
+
+	dir_entry.present()
 }
 
 pub fn read_line(f: &mut File) -> String {

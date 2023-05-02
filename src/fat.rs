@@ -137,7 +137,15 @@ impl DirectoryEntry {
 	}
 
 	pub fn is_normal(&self) -> bool {
-		(self.attributes) & DirectoryEntry::ATTR_LFN != DirectoryEntry::ATTR_LFN
+		self.attributes & Self::ATTR_VOLUME_ID & Self::ATTR_LFN == 0
+	}
+
+	pub fn present(&self) -> Option<Self> {
+		if self.is_empty() {
+			None
+		} else {
+			Some(*self)
+		}
 	}
 
 	pub fn new(name: &str) -> Self {

@@ -1,11 +1,10 @@
 use alloc::{format, vec};
-use core::{cmp::min, fmt::Write, mem::size_of};
+use core::{cmp::min, fmt::Write};
 
 use crate::{
 	arch::x86::{clock::uptime_seconds, halt},
 	ed::ed_main,
-	fat::DirectoryEntry,
-	fs::{create, open, read, write, File},
+	fs::{create, open, read, readdir, write, File},
 	proc::Task,
 	time::DateTime,
 };
@@ -60,7 +59,7 @@ pub fn main() {
 fn ls_main(path: Option<&str>) {
 	let mut term = open("CONS").unwrap();
 
-	let mut f = match path {
+	let mut dir = match path {
 		Some(p) => {
 			if let Some(f) = open(p) {
 				f
@@ -71,7 +70,7 @@ fn ls_main(path: Option<&str>) {
 		None => open(".").unwrap(),
 	};
 
-	if let File::File(file) = f {
+	if let File::File(file) = dir {
 		write(
 			&mut term,
 			format!("    {:5} {:8} {:12}\n", "", file.size(), file.name(),)
@@ -80,18 +79,7 @@ fn ls_main(path: Option<&str>) {
 		return;
 	}
 
-	let mut buf = [0u8; size_of::<DirectoryEntry>()];
-
-	// Now list the contents of this directory.
-	while read(&mut f, &mut buf) != 0 {
-		// Listing is complete when byte[0] is 0.
-		if buf[0] == 0 {
-			break;
-		}
-
-		let de: DirectoryEntry =
-			unsafe { *(&buf as *const u8 as *const DirectoryEntry) };
-
+	while let Some(de) = readdir(&mut dir) {
 		// Ignore LFN entries for now.
 		if !de.is_normal() {
 			continue;
