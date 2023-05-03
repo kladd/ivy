@@ -22,19 +22,29 @@ $(start_a): $(start_obj)
 $(kernel): $(start_a) always
 	cargo build --features log/max_level_$(log_level)
 
-$(target_dir)/_disk_image: $(kernel)
-	qemu-img$(qemu_exe) create -f raw $@ $(disk_size)
-	mkfs.fat -F 16 $@
-	mkdir -p $(target_dir)/mnt
-	sudo mount $@ $(target_dir)/mnt
-	sudo cp -r base/* $(target_dir)/mnt
-	sudo umount $(target_dir)/mnt
-
+.PHONY: run
 run: $(kernel)
 	@qemu-system-i386$(qemu_exe) -kernel $< \
 		-m 2g \
 		-serial stdio \
+		-no-reboot \
+		-no-shutdown \
 		-drive file=fat:rw:base,format=raw,media=disk,cache=writethrough
+
+# TODO: Headless as option
+.PHONY: headless
+headless: $(kernel)_headless
+	@qemu-system-i386$(qemu_exe) -kernel $(kernel) \
+		-m 2g \
+		-nographic \
+		-no-reboot \
+		-no-shutdown \
+		-drive file=fat:rw:base,format=raw,media=disk,cache=writethrough
+
+.PHONY: $(kernel)_headless
+$(kernel)_headless: $(start_a)
+	cargo build --features log/max_level_$(log_level),headless
+
 
 always: ;
 

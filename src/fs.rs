@@ -1,15 +1,22 @@
 use alloc::string::String;
 use core::{cmp::min, fmt::Write, mem::size_of, slice};
 
+#[cfg(feature = "headless")]
+use crate::devices::serial::{SerialPort, COM1};
+#[cfg(not(feature = "headless"))]
 use crate::{
-	fat, fat::DirectoryEntry, keyboard::KBD, proc::Task, std::io,
-	vga::VideoMemory,
+	devices::keyboard::{Keyboard, BUFFER_SIZE, KBD},
+	vga::{VideoMemory, VGA},
 };
+use crate::{fat, fat::DirectoryEntry, proc::Task, std::io};
 
 pub enum File<'a> {
 	Directory(fat::File<'a>),
 	File(fat::File<'a>),
-	Terminal(io::Terminal<'a>),
+	#[cfg(not(feature = "headless"))]
+	Terminal(io::Terminal<'a, Keyboard<BUFFER_SIZE>, VideoMemory>),
+	#[cfg(feature = "headless")]
+	Terminal(io::Terminal<'a, SerialPort, SerialPort>),
 }
 
 pub fn create(path: &str) -> File {
@@ -27,9 +34,15 @@ pub fn open(path: &str) -> Option<File> {
 			let fs = task.fs;
 			File::Directory(fs.open(*task.cwd))
 		}
+		#[cfg(not(feature = "headless"))]
 		"CONS" => File::Terminal(io::Terminal {
-			kbd: unsafe { &mut KBD },
-			vga: VideoMemory::get(),
+			read: unsafe { &mut KBD },
+			write: unsafe { &mut VGA },
+		}),
+		#[cfg(feature = "headless")]
+		"CONS" => File::Terminal(io::Terminal {
+			read: unsafe { &mut COM1 },
+			write: unsafe { &mut COM1 },
 		}),
 		_ => {
 			let task = unsafe { &*Task::current() };

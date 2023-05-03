@@ -1,6 +1,9 @@
 use core::{cell::UnsafeCell, fmt::Write};
 
-use crate::arch::x86::outb;
+use crate::{
+	arch::x86::outb,
+	devices::character::{Keycode, WriteCharacter},
+};
 
 const VIDEO_MEMORY: *mut u16 = 0xB8000 as *mut u16;
 const ROWS: usize = 25;
@@ -13,7 +16,9 @@ const BLACK: u8 = 0x0;
 const BLUE: u8 = 0x1;
 const WHITE: u8 = 0xF;
 
-static CARRIER: Carrier = Carrier {
+pub static mut VGA: VideoMemory = VideoMemory::get();
+
+static mut CARRIER: Carrier = Carrier {
 	row: UnsafeCell::new(0),
 	col: UnsafeCell::new(0),
 	color: UnsafeCell::new(WHITE | BLUE << 4),
@@ -61,12 +66,26 @@ impl Carrier {
 	}
 }
 
-unsafe impl Sync for Carrier {}
-
 pub struct VideoMemory;
 
+impl WriteCharacter for VideoMemory {
+	fn putc(&mut self, keycode: Keycode) {
+		match keycode {
+			Keycode::Newline => self.insert_newline().unwrap(),
+			Keycode::Nak => self.nak(),
+			Keycode::FormFeed => self.form_feed(),
+			Keycode::VerticalTab => self.vertical_tab(),
+			Keycode::Backspace => self.backspace(),
+			Keycode::Char(c) => self.write_byte(c as u8).unwrap(),
+			Keycode::Null => {}
+			Keycode::StartOfHeading => {}
+		}
+		self.update_cursor()
+	}
+}
+
 impl VideoMemory {
-	pub fn get() -> Self {
+	pub const fn get() -> Self {
 		Self
 	}
 
@@ -79,30 +98,32 @@ impl VideoMemory {
 	}
 
 	pub fn insert_newline(&self) -> core::fmt::Result {
-		if CARRIER.row() == ROWS - 1 {
+		if unsafe { CARRIER.row() } == ROWS - 1 {
 			self.scroll();
 			self.vertical_tab();
 			self.nak();
 		} else {
-			CARRIER.set_row(CARRIER.row() + 1);
+			unsafe { CARRIER.set_row(CARRIER.row() + 1) };
 		}
-		CARRIER.set_col(0);
+		unsafe { CARRIER.set_col(0) };
 		self.update_cursor();
 
 		Ok(())
 	}
 
 	fn insert_carriage_return(&self) -> core::fmt::Result {
-		CARRIER.set_col(0);
+		unsafe { CARRIER.set_col(0) };
 		self.update_cursor();
 
 		Ok(())
 	}
 
 	fn write_byte_visible(&self, byte: u8) -> core::fmt::Result {
-		CARRIER.write_cell(byte);
-		CARRIER.inc_row((CARRIER.col() + 1) / COLS);
-		CARRIER.set_col((CARRIER.col() + 1) % COLS);
+		unsafe {
+			CARRIER.write_cell(byte);
+			CARRIER.inc_row((CARRIER.col() + 1) / COLS);
+			CARRIER.set_col((CARRIER.col() + 1) % COLS);
+		}
 
 		Ok(())
 	}
@@ -113,8 +134,10 @@ impl VideoMemory {
 				*VIDEO_MEMORY.offset(i as isize) = CARRIER.cell(0x20);
 			}
 		}
-		CARRIER.set_row(0);
-		CARRIER.set_col(0);
+		unsafe {
+			CARRIER.set_row(0);
+			CARRIER.set_col(0);
+		}
 
 		self.update_cursor();
 	}
@@ -139,42 +162,45 @@ impl VideoMemory {
 			}
 		}
 		// Update the row of the cursor but retain the column.
-		CARRIER.set_row(0);
+		unsafe { CARRIER.set_row(0) };
 		self.update_cursor();
 	}
 
 	pub fn nak(&self) {
-		let line_start = CARRIER.row() * COLS;
-		let cursor = line_start + CARRIER.col();
+		let line_start = unsafe { CARRIER.row() } * COLS;
+		let cursor = line_start + unsafe { CARRIER.col() };
 
 		for i in line_start..cursor {
 			unsafe {
 				*VIDEO_MEMORY.offset(i as isize) = CARRIER.cell(0x20);
 			}
 		}
-		CARRIER.set_col(0);
+		unsafe {
+			CARRIER.set_col(0);
+		}
 
 		self.update_cursor();
 	}
 
 	pub fn backspace(&self) {
-		let col = CARRIER.col();
+		let col = unsafe { CARRIER.col() };
 		if col > 0 {
-			CARRIER.set_col(col - 1);
-			CARRIER.write_cell(0x20);
-
+			unsafe {
+				CARRIER.set_col(col - 1);
+				CARRIER.write_cell(0x20);
+			}
 			self.update_cursor();
 		}
 	}
 
 	pub fn start_of_heading(&self) {
-		CARRIER.set_col(0);
+		unsafe { CARRIER.set_col(0) };
 		self.update_cursor();
 	}
 
 	pub fn vertical_tab(&self) {
-		let cursor = CARRIER.pos();
-		let eol = (CARRIER.row() + 1) * COLS;
+		let cursor = unsafe { CARRIER.pos() };
+		let eol = (unsafe { CARRIER.row() } + 1) * COLS;
 
 		for i in cursor..eol {
 			unsafe {
@@ -193,7 +219,7 @@ impl VideoMemory {
 	}
 
 	fn update_cursor(&self) {
-		let cursor = CARRIER.pos();
+		let cursor = unsafe { CARRIER.pos() };
 
 		outb(0x3D4, 0x0F);
 		outb(0x3D5, (cursor & 0xFF) as u8);

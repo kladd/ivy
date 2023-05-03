@@ -3,5 +3,8 @@ name = "ivy"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+headless = []
+
 [dependencies]
 log = "0.4.17"

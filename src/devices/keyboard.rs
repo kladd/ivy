@@ -1,5 +1,6 @@
 use crate::{
 	arch::x86::{inb, interrupt_descriptor_table::register_handler, outb},
+	devices::character::{Keycode, ReadCharacter},
 	isr,
 };
 
@@ -33,7 +34,7 @@ const I8042_KEY_DEPRESSED: u8 = 0x80;
 
 const STATUS_DATA_AVAILABLE: u8 = 0x1;
 
-const BUFFER_SIZE: usize = 16;
+pub const BUFFER_SIZE: usize = 16;
 
 static mut MODS: u8 = 0;
 
@@ -42,21 +43,20 @@ pub static mut KBD: Keyboard<BUFFER_SIZE> = Keyboard {
 	buffer: [Keycode::Null; BUFFER_SIZE],
 };
 
-#[derive(Copy, Clone)]
-pub enum Keycode {
-	Null,
-	Nak,
-	StartOfHeading,
-	VerticalTab,
-	FormFeed,
-	Backspace,
-	Newline,
-	Char(char),
-}
-
 pub struct Keyboard<const N: usize> {
 	index: usize,
 	buffer: [Keycode; N],
+}
+
+impl<const N: usize> ReadCharacter for Keyboard<N> {
+	fn getc(&mut self) -> Option<Keycode> {
+		if self.index == 0 {
+			None
+		} else {
+			self.index -= 1;
+			Some(self.buffer[self.index])
+		}
+	}
 }
 
 impl<const N: usize> Keyboard<N> {
@@ -67,15 +67,6 @@ impl<const N: usize> Keyboard<N> {
 			self.index = next;
 		} else {
 			panic!("Keyboard buffer full!");
-		}
-	}
-
-	pub fn getc(&mut self) -> Option<Keycode> {
-		if self.index == 0 {
-			None
-		} else {
-			self.index -= 1;
-			Some(self.buffer[self.index])
 		}
 	}
 }

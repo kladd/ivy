@@ -9,14 +9,13 @@ extern crate alloc;
 #[macro_use]
 mod debug;
 mod arch;
+mod devices;
 mod ed;
 mod fat;
 mod fs;
-mod keyboard;
 mod logger;
 mod multiboot;
 mod proc;
-mod serial;
 mod shell;
 mod std;
 mod time;
@@ -24,8 +23,12 @@ mod vga;
 
 use core::{fmt::Write, panic::PanicInfo};
 
-use log::{error, info};
+use log::{error, warn};
 
+#[cfg(feature = "headless")]
+use crate::devices::serial::COM1;
+#[cfg(not(feature = "headless"))]
+use crate::vga::VideoMemory;
 use crate::{
 	arch::x86::{
 		clock::init_clock, disable_interrupts, enable_interrupts,
@@ -33,14 +36,12 @@ use crate::{
 		interrupt_controller::init_pic, interrupt_descriptor_table::init_idt,
 		virtual_memory::init_kernel_page_tables,
 	},
+	devices::{keyboard::init_keyboard, serial::init_serial},
 	fat::FATFileSystem,
-	keyboard::init_keyboard,
 	logger::KernelLogger,
 	multiboot::{MultibootFlags, MultibootInfo},
 	proc::{schedule, Task},
-	serial::COM1,
 	std::alloc::KernelAlloc,
-	vga::VideoMemory,
 };
 
 pub const MULTIBOOT_MAGIC: u32 = 0x2BADB002;
@@ -64,30 +65,34 @@ pub extern "C" fn kernel_start(
 	multiboot_flags: &MultibootFlags,
 ) {
 	assert_eq!(multiboot_magic, MULTIBOOT_MAGIC);
-
-	COM1.init();
-	log::set_logger(&LOGGER).unwrap();
-	log::set_max_level(log::STATIC_MAX_LEVEL);
-
 	let _boot_info = MultibootInfo::read(multiboot_flags);
 
 	init_gdt();
 	init_kernel_page_tables();
 
-	let mut vga = VideoMemory::get();
-
-	vga.clear_screen();
-	writeln!(vga, "Welcome to Ivy OS!").unwrap();
+	log::set_logger(&LOGGER).unwrap();
+	log::set_max_level(log::STATIC_MAX_LEVEL);
 
 	init_idt();
 	init_pic();
 
 	init_clock();
 	init_keyboard();
+	init_serial();
 
 	enable_interrupts();
 
-	info!("If you can read this, info logging works");
+	#[cfg(not(feature = "headless"))]
+	{
+		let mut vga = VideoMemory::get();
+		vga.clear_screen();
+		writeln!(vga, "Welcome to Ivy OS!").unwrap();
+	}
+	#[cfg(feature = "headless")]
+	unsafe {
+		writeln!(COM1, "\n\nWelcome to Ivy OS!\n").unwrap();
+		warn!("To quit type Ctrl-A then `c` then `quit`.\n");
+	}
 
 	init_ide();
 

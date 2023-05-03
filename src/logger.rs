@@ -2,7 +2,7 @@ use core::fmt::Write;
 
 use log::{Level, Metadata, Record};
 
-use crate::serial;
+use crate::devices::serial;
 
 pub struct KernelLogger;
 
@@ -18,17 +18,19 @@ impl log::Log for KernelLogger {
 
 	fn log(&self, record: &Record) {
 		if self.enabled(record.metadata()) {
-			writeln!(
-				serial::COM1,
-				"{}{:>5}{} [{}:{}]: {}",
-				Self::start_color(record.metadata()),
-				record.level(),
-				COLOR_DEFAULT,
-				record.file().unwrap(),
-				record.line().unwrap(),
-				record.args()
-			)
-			.unwrap();
+			unsafe {
+				writeln!(
+					serial::COM1,
+					"{}{:>5}{} [{}:{}]: {}",
+					Self::start_color(record.metadata()),
+					record.level(),
+					COLOR_DEFAULT,
+					record.file().unwrap(),
+					record.line().unwrap(),
+					record.args()
+				)
+				.unwrap()
+			};
 		}
 	}
 
