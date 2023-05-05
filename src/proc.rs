@@ -8,8 +8,10 @@ use log::info;
 
 use crate::{
 	arch::x86::halt,
-	fat::{DirectoryEntryNode, FATFileSystem},
-	fs::File,
+	fs::{
+		fat::{DirectoryEntryNode, FATFileSystem},
+		File,
+	},
 	std::alloc::kmalloc_aligned,
 };
 

@@ -11,7 +11,6 @@ mod debug;
 mod arch;
 mod devices;
 mod ed;
-mod fat;
 mod fs;
 mod logger;
 mod multiboot;
@@ -23,7 +22,7 @@ mod vga;
 
 use core::{fmt::Write, panic::PanicInfo};
 
-use log::{error, warn};
+use log::error;
 
 #[cfg(feature = "headless")]
 use crate::devices::serial::COM1;
@@ -37,7 +36,7 @@ use crate::{
 		virtual_memory::init_kernel_page_tables,
 	},
 	devices::{keyboard::init_keyboard, serial::init_serial},
-	fat::FATFileSystem,
+	fs::fat::FATFileSystem,
 	logger::KernelLogger,
 	multiboot::{MultibootFlags, MultibootInfo},
 	proc::{schedule, Task},

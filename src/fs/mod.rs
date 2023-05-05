@@ -1,5 +1,9 @@
+pub mod fat;
+
 use alloc::string::String;
 use core::{cmp::min, fmt::Write, mem::size_of, slice};
+
+use fat::DirectoryEntry;
 
 #[cfg(feature = "headless")]
 use crate::devices::serial::{SerialPort, COM1};
@@ -8,7 +12,7 @@ use crate::{
 	devices::keyboard::{Keyboard, BUFFER_SIZE, KBD},
 	vga::{VideoMemory, VGA},
 };
-use crate::{fat, fat::DirectoryEntry, proc::Task, std::io};
+use crate::{proc::Task, std::io};
 
 pub enum File<'a> {
 	Directory(fat::File<'a>),
