@@ -6,7 +6,7 @@ macro_rules! kdbg {
 	($val:expr $(,)?) => {
 		match $val {
 			v => {
-				::log::debug!("{v:?}");
+				::log::debug!("{} = {v:#?}", stringify!($val));
 				v
 			}
 		}
