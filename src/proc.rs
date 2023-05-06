@@ -9,7 +9,7 @@ use log::info;
 use crate::{
 	arch::x86::halt,
 	fs::{
-		fat::{DirectoryEntryNode, FATFileSystem},
+		fat::{FATFileSystem, FATInode},
 		File,
 	},
 	std::alloc::kmalloc_aligned,
@@ -25,7 +25,7 @@ pub struct Task<'a> {
 	esp: u32,
 	cr3: u32,
 	pub fs: &'a FATFileSystem,
-	pub cwd: &'a DirectoryEntryNode,
+	pub cwd: &'a FATInode,
 }
 
 #[repr(packed)]
@@ -41,11 +41,7 @@ struct TaskStackFrame {
 impl<'a> Task<'a> {
 	const STACK_SIZE: u32 = 0x1000;
 
-	pub fn new(
-		entry: fn(),
-		fs: &'a FATFileSystem,
-		cwd: &'a DirectoryEntryNode,
-	) -> Self {
+	pub fn new(entry: fn(), fs: &'a FATFileSystem, cwd: &'a FATInode) -> Self {
 		let stack_bottom = kmalloc_aligned(Self::STACK_SIZE as usize);
 
 		let eip = entry as u32;
@@ -79,7 +75,7 @@ impl<'a> Task<'a> {
 	pub fn chdir(&self, f: &File) {
 		match f {
 			File::Directory(f) => unsafe {
-				ptr::replace::<DirectoryEntryNode>(
+				ptr::replace::<FATInode>(
 					self.cwd as *const _ as *mut _,
 					f.entry(),
 				);
