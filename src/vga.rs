@@ -66,6 +66,7 @@ impl Carrier {
 	}
 }
 
+#[derive(Debug)]
 pub struct VideoMemory;
 
 impl WriteCharacter for VideoMemory {

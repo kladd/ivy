@@ -44,14 +44,17 @@ extern "C" {
 
 static mut PAGE_DIRECTORY: PageDirectory = PageDirectory::new();
 static mut PAGE_TABLE_1: PageTable = PageTable::new();
+static mut PAGE_TABLE_2: PageTable = PageTable::new();
 
 pub fn init_kernel_page_tables() {
 	unsafe {
-		// Identity map 0-4MB.
+		// Identity map 0-8MB.
 		for i in 0..1024 {
 			PAGE_TABLE_1.set(i, i as u32, READ_WRITE | PRESENT);
+			PAGE_TABLE_2.set(i, i as u32 + 1024, READ_WRITE | PRESENT);
 		}
 		PAGE_DIRECTORY.set(0, &PAGE_TABLE_1, READ_WRITE | PRESENT);
+		PAGE_DIRECTORY.set(1, &PAGE_TABLE_2, READ_WRITE | PRESENT);
 		PAGE_DIRECTORY.make_active();
 		enable_paging();
 	}

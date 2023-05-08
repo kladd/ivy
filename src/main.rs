@@ -14,13 +14,12 @@ mod devices;
 mod fs;
 mod logger;
 mod multiboot;
-// mod proc;
-// mod shell;
+mod proc;
+mod shell;
 mod std;
 mod time;
 mod vga;
 
-use alloc::rc::Rc;
 use core::{fmt::Write, panic::PanicInfo};
 
 use log::error;
@@ -29,7 +28,6 @@ use log::warn;
 
 #[cfg(feature = "headless")]
 use crate::devices::serial::COM1;
-use crate::fs::dev::DeviceFileSystem;
 #[cfg(not(feature = "headless"))]
 use crate::vga::VideoMemory;
 use crate::{
@@ -40,19 +38,24 @@ use crate::{
 		virtual_memory::init_kernel_page_tables,
 	},
 	devices::{keyboard::init_keyboard, serial::init_serial},
-	fs::{fat::FATFileSystem, inode::Inode, FileSystem},
+	fs::{fat::FATFileSystem, FileSystem},
 	logger::KernelLogger,
 	multiboot::{MultibootFlags, MultibootInfo},
 	// proc::{schedule, Task},
 	std::alloc::KernelAlloc,
 };
+use crate::{
+	fs::dev::DeviceFileSystem,
+	proc::{kernel_idle, Task},
+	std::io::{SerialTerminal, VideoTerminal},
+};
 
 pub const MULTIBOOT_MAGIC: u32 = 0x2BADB002;
 
 #[panic_handler]
-unsafe fn panic(_info: &PanicInfo) -> ! {
+unsafe fn panic(info: &PanicInfo) -> ! {
 	disable_interrupts();
-	error!("kernel {}", _info);
+	error!("kernel {info:#}");
 	halt();
 	unreachable!();
 }
@@ -99,14 +102,26 @@ pub extern "C" fn kernel_start(
 
 	init_ide();
 
-	// Start the shell.
-	let dosfs = Rc::new(FATFileSystem::new(0));
+	FileSystem::init();
+	VideoTerminal::init();
+	SerialTerminal::init();
+
+	// Mount file systems.
+	let dosfs = FATFileSystem::new(0);
 	let devfs = DeviceFileSystem;
-	let mut fs = FileSystem::new(Inode::FAT(dosfs.root()));
-	fs.mount("DEV", devfs.root_inode());
-	kdbg!(fs.open(fs.root(), "HOME/USER/README.MD"));
-	kdbg!(fs.open(fs.root(), "DEV/CONSOLE"));
-	// let cwd = fs.find(&fs.root(), "HOME/USER").unwrap();
-	// let sh = Task::new(shell::main, &fs, &cwd);
-	// schedule(&sh);
+
+	let fs = FileSystem::current();
+	fs.mount_root(dosfs.root());
+	fs.mount("DEV", devfs.root());
+
+	// Start the shell.
+	let cwd = fs.find(&fs.root(), "/HOME/USER").unwrap();
+
+	let sh = Task::new(shell::main, cwd);
+	Task::set_current(&sh);
+
+	// TODO: Task switching is busted.
+	shell::main();
+
+	kernel_idle();
 }

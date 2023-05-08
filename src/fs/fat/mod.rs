@@ -1,20 +1,15 @@
 pub mod inode;
 
-use alloc::{rc::Rc, string::String, vec, vec::Vec};
-use core::{
-	cmp::min,
-	fmt::{Debug, Write},
-	mem,
-	slice::from_raw_parts,
-};
+use alloc::{string::String, vec::Vec};
+use core::fmt::{Debug, Write};
 
-use log::{info, trace};
+use log::info;
 
 use crate::{
 	arch::x86::ide::{
-		read, read_offset, read_offset_to_vec, read_sector, write_sector,
+		read_offset, read_offset_to_vec, read_sector, write_sector,
 	},
-	fs::fat::inode::FATInode,
+	fs::{fat::inode::FATInode, inode::Inode},
 	time::DateTime,
 };
 
@@ -88,11 +83,12 @@ pub struct DirectoryEntry {
 	size: u32,
 }
 
-#[derive(Debug)]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct FATFileSystem {
-	bpb: BIOSParameterBlock,
-	lba_start: u32,
-	device: u8,
+	pub pb: ParameterBlock,
+	pub lba_start: u32,
+	pub device: u8,
 }
 
 impl DirectoryEntry {
@@ -193,15 +189,38 @@ fn as_time(dt: &DateTime) -> u16 {
 		| (dt.second() / 2) as u16
 }
 
-impl BIOSParameterBlock {
+impl ParameterBlock {
 	fn root_dir_sectors(&self) -> u16 {
 		((self.root_entry_count * 32) + (self.bytes_per_sector - 1))
 			/ self.bytes_per_sector
 	}
 
 	fn root_dir_sector(&self) -> u32 {
-		self.reserved_sector_count as u32
-			+ (self.num_fats as u32 * self.fat_sz_16 as u32)
+		self.reserved_sector_count + (self.num_fats * self.fat_sz_16)
+	}
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ParameterBlock {
+	root_entry_count: u16,
+	bytes_per_sector: u16,
+	reserved_sector_count: u32,
+	num_fats: u32,
+	fat_sz_16: u32,
+	sectors_per_cluster: u32,
+}
+
+impl From<BIOSParameterBlock> for ParameterBlock {
+	fn from(bpb: BIOSParameterBlock) -> Self {
+		Self {
+			root_entry_count: bpb.root_entry_count,
+			bytes_per_sector: bpb.bytes_per_sector,
+			reserved_sector_count: bpb.reserved_sector_count as u32,
+			num_fats: bpb.num_fats as u32,
+			fat_sz_16: bpb.fat_sz_16 as u32,
+			sectors_per_cluster: bpb.sectors_per_cluster as u32,
+		}
 	}
 }
 
@@ -215,22 +234,23 @@ impl FATFileSystem {
 			unsafe { read_offset::<Partition>(Self::MBR_PART_1 as usize) };
 
 		read_sector(device, partition_1.lba_start);
+		let bpb = unsafe { read_offset::<BIOSParameterBlock>(0x0B) };
 		Self {
-			bpb: unsafe { read_offset::<BIOSParameterBlock>(0x0B) },
+			pb: ParameterBlock::from(bpb),
 			lba_start: partition_1.lba_start,
 			device,
 		}
 	}
 
-	pub fn root(self: Rc<Self>) -> FATInode {
+	pub fn root(&self) -> Inode {
 		let mut entry = DirectoryEntry::default();
 		entry.attributes = DirectoryEntry::ATTR_DIRECTORY;
-		FATInode {
+		Inode::FAT(FATInode {
 			entry,
 			cluster_offset: 0,
 			dir_sector: 0,
-			fs: self,
-		}
+			fs: self.clone(),
+		})
 	}
 
 	pub fn read_file(&self, entry: &DirectoryEntry) -> Vec<u8> {
@@ -258,15 +278,15 @@ impl FATFileSystem {
 	}
 
 	fn root_dir_sector_lba(&self) -> u32 {
-		self.bpb.root_dir_sector() + self.lba_start
+		self.pb.root_dir_sector() + self.lba_start
 	}
 
 	fn data_sector_lba(&self, entry: &DirectoryEntry) -> u32 {
 		let root_dir_lba = self.root_dir_sector_lba();
 		match entry.first_cluster_lo.checked_sub(2) {
 			Some(first_cluster) => {
-				(first_cluster as u32 * self.bpb.sectors_per_cluster as u32)
-					+ root_dir_lba + self.bpb.root_dir_sectors() as u32
+				(first_cluster as u32 * self.pb.sectors_per_cluster as u32)
+					+ root_dir_lba + self.pb.root_dir_sectors() as u32
 			}
 			None => root_dir_lba as u32,
 		}
@@ -282,9 +302,9 @@ impl FATFileSystem {
 	}
 
 	fn fat_lba(&self, n: u32) -> u32 {
-		self.bpb.reserved_sector_count as u32
+		self.pb.reserved_sector_count as u32
 			+ self.lba_start
-			+ (self.bpb.fat_sz_16 as u32 * n)
+			+ (self.pb.fat_sz_16 as u32 * n)
 	}
 
 	fn alloc_cluster(&self) -> usize {

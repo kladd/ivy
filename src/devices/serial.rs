@@ -15,6 +15,7 @@ use crate::{
 	isr,
 };
 
+#[derive(Debug)]
 pub struct SerialPort(u16);
 pub static mut COM1: SerialPort = SerialPort(0x3F8);
 

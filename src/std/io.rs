@@ -1,14 +1,28 @@
 use alloc::string::String;
-use core::fmt::Write;
+use core::{fmt::Write, mem::MaybeUninit};
 
 use crate::{
 	arch::x86::halt,
-	devices::character::{Keycode, ReadCharacter, WriteCharacter},
+	devices::{
+		character::{Keycode, ReadCharacter, WriteCharacter},
+		keyboard,
+		keyboard::{Keyboard, KBD},
+		serial::{SerialPort, COM1},
+	},
+	vga::{VideoMemory, VGA},
 };
 
 const KBD_BUFFER_SIZE: usize = 16;
 const MAX_LINE_LEN: usize = 78;
 
+pub type VideoTerminal =
+	Terminal<'static, Keyboard<{ keyboard::BUFFER_SIZE }>, VideoMemory>;
+pub type SerialTerminal = Terminal<'static, SerialPort, SerialPort>;
+
+static mut VGA_TERM: MaybeUninit<VideoTerminal> = MaybeUninit::uninit();
+static mut SERIAL_TERM: MaybeUninit<SerialTerminal> = MaybeUninit::uninit();
+
+#[derive(Debug)]
 pub struct Terminal<'a, R, W>
 where
 	R: ReadCharacter,
@@ -16,6 +30,36 @@ where
 {
 	pub read: &'a mut R,
 	pub write: &'a mut W,
+}
+
+impl VideoTerminal {
+	pub fn init() {
+		unsafe {
+			VGA_TERM.write(Terminal {
+				read: &mut KBD,
+				write: &mut VGA,
+			})
+		};
+	}
+
+	pub fn global_mut() -> &'static mut Self {
+		unsafe { VGA_TERM.assume_init_mut() }
+	}
+}
+
+impl SerialTerminal {
+	pub fn init() {
+		unsafe {
+			SERIAL_TERM.write(Terminal {
+				read: &mut COM1,
+				write: &mut COM1,
+			})
+		};
+	}
+
+	pub fn global_mut() -> &'static mut Self {
+		unsafe { SERIAL_TERM.assume_init_mut() }
+	}
 }
 
 impl<'a, R, W> Terminal<'a, R, W>

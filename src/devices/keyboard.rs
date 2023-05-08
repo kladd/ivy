@@ -43,6 +43,7 @@ pub static mut KBD: Keyboard<BUFFER_SIZE> = Keyboard {
 	buffer: [Keycode::Null; BUFFER_SIZE],
 };
 
+#[derive(Debug)]
 pub struct Keyboard<const N: usize> {
 	index: usize,
 	buffer: [Keycode; N],

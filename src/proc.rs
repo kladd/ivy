@@ -4,28 +4,24 @@ use core::{
 	sync::atomic::{AtomicPtr, AtomicU32, Ordering},
 };
 
-use log::info;
+use log::warn;
 
 use crate::{
-	arch::x86::halt,
-	fs::{
-		fat::{FATFileSystem, FATInode},
-		File,
-	},
+	arch::x86::{disable_interrupts, halt},
+	fs::{file_descriptor::FileDescriptor, inode::Inode},
 	std::alloc::kmalloc_aligned,
 };
 
 static PID_COUNTER: AtomicU32 = AtomicU32::new(0);
 static CURRENT_TASK: AtomicPtr<Task> = AtomicPtr::new(0 as *mut Task);
 
-#[repr(C)]
 #[derive(Debug)]
-pub struct Task<'a> {
+#[repr(C)]
+pub struct Task {
 	pid: u32,
 	esp: u32,
 	cr3: u32,
-	pub fs: &'a FATFileSystem,
-	pub cwd: &'a FATInode,
+	pub cwd: Inode,
 }
 
 #[repr(packed)]
@@ -38,11 +34,11 @@ struct TaskStackFrame {
 	ret: u32,
 }
 
-impl<'a> Task<'a> {
+impl Task {
 	const STACK_SIZE: u32 = 0x1000;
 
-	pub fn new(entry: fn(), fs: &'a FATFileSystem, cwd: &'a FATInode) -> Self {
-		let stack_bottom = kmalloc_aligned(Self::STACK_SIZE as usize);
+	pub fn new(entry: fn(), cwd: Inode) -> Self {
+		let stack_bottom = kmalloc_aligned(Self::STACK_SIZE as usize * 2);
 
 		let eip = entry as u32;
 		let ebp = stack_bottom + Self::STACK_SIZE;
@@ -63,30 +59,28 @@ impl<'a> Task<'a> {
 			esp,
 			// TODO: Allocate a new page directory.
 			cr3: 0,
-			fs,
 			cwd,
 		}
 	}
 
-	pub fn current() -> *mut Task<'static> {
+	pub fn set_current(task: &Task) {
+		CURRENT_TASK.store(task as *const _ as *mut _, Ordering::Relaxed);
+	}
+
+	pub fn current() -> *mut Task {
 		CURRENT_TASK.load(Ordering::Relaxed)
 	}
 
-	pub fn chdir(&self, f: &File) {
-		match f {
-			File::Directory(f) => unsafe {
-				ptr::replace::<FATInode>(
-					self.cwd as *const _ as *mut _,
-					f.entry(),
-				);
-			},
-			_ => return,
-		}
+	pub fn chdir(&self, fd: &FileDescriptor) {
+		unsafe {
+			ptr::replace::<Inode>(&self.cwd as *const _ as *mut _, fd.inode)
+		};
 	}
 }
 
 pub fn schedule(task: &Task) -> ! {
 	CURRENT_TASK.store(task as *const _ as *mut _, Ordering::Relaxed);
+	disable_interrupts();
 	unsafe { switch_task(task) };
 	unreachable!();
 }
@@ -96,8 +90,8 @@ extern "C" {
 	fn switch_task(task: &Task) -> u32;
 }
 
-fn kernel_idle() -> ! {
-	info!("IDLE");
+pub fn kernel_idle() -> ! {
+	warn!("Idle task");
 	loop {
 		halt();
 	}

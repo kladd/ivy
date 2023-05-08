@@ -1,36 +1,31 @@
 pub mod dev;
 pub mod fat;
+pub mod file_descriptor;
 pub mod inode;
 
-use alloc::{vec, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
+use core::{
+	ptr::null_mut,
+	sync::atomic::{AtomicPtr, Ordering},
+};
 
-use crate::fs::inode::{Inode, InodeHash};
+use crate::fs::{
+	file_descriptor::FileDescriptor,
+	inode::{Inode, InodeHash},
+};
 
 #[derive(Debug)]
-pub struct FileDescriptor {
-	offset: usize,
-	inode: Inode,
-}
-
 pub struct MountPoint {
 	host_inode_hash: Option<InodeHash>,
 	guest_root_inode: Inode,
 }
 
+#[derive(Debug)]
 pub struct FileSystem {
 	mounts: Vec<MountPoint>,
 }
 
 impl FileSystem {
-	pub fn new(root_inode: Inode) -> Self {
-		Self {
-			mounts: vec![MountPoint {
-				host_inode_hash: None,
-				guest_root_inode: root_inode,
-			}],
-		}
-	}
-
 	pub fn root(&self) -> &Inode {
 		&self.mounts[0].guest_root_inode
 	}
@@ -40,6 +35,11 @@ impl FileSystem {
 		self.find(base, path).map(FileDescriptor::from)
 	}
 
+	pub fn mount_root(&mut self, root: Inode) {
+		assert!(self.mounts.is_empty(), "Root filesystem already mounted");
+		self.mount_inode(None, root);
+	}
+
 	pub fn mount(&mut self, path: &str, guest_root: Inode) {
 		// TODO: Handle mount points that don't exist.
 		// TODO: Mount with arbitrary relative paths instead of relative to
@@ -47,15 +47,10 @@ impl FileSystem {
 		let host_inode = self
 			.find(self.root(), path)
 			.expect("Mount point doesn't exist");
-		self.mounts.push(MountPoint {
-			host_inode_hash: Some(host_inode.hash()),
-			guest_root_inode: guest_root,
-		});
+		self.mount_inode(Some(host_inode), guest_root);
 	}
-}
 
-impl FileSystem {
-	fn find(&self, base: &Inode, path: &str) -> Option<Inode> {
+	pub fn find(&self, base: &Inode, path: &str) -> Option<Inode> {
 		if path == "." {
 			Some(base.clone())
 		} else if path.starts_with("/") {
@@ -81,6 +76,15 @@ impl FileSystem {
 			Some(node)
 		}
 	}
+}
+
+impl FileSystem {
+	fn mount_inode(&mut self, host_inode: Option<Inode>, guest_root: Inode) {
+		self.mounts.push(MountPoint {
+			host_inode_hash: host_inode.map(|inode| inode.hash()),
+			guest_root_inode: guest_root,
+		});
+	}
 
 	fn mount_point(&self, node: &Inode) -> Option<Inode> {
 		self.mounts
@@ -96,9 +100,25 @@ impl FileSystem {
 	}
 }
 
-impl From<Inode> for FileDescriptor {
-	fn from(inode: Inode) -> Self {
-		Self { offset: 0, inode }
+// static mut GLOBAL: MaybeUninit<Pin<Box<FileSystem>>> = MaybeUninit::uninit();
+
+static GLOBAL: AtomicPtr<FileSystem> = AtomicPtr::new(null_mut());
+
+impl FileSystem {
+	pub fn init() {
+		let fs = Box::new(Self { mounts: Vec::new() });
+		GLOBAL
+			.compare_exchange(
+				null_mut(),
+				Box::leak(fs),
+				Ordering::Acquire,
+				Ordering::Relaxed,
+			)
+			.unwrap();
+	}
+
+	pub fn current() -> &'static mut FileSystem {
+		unsafe { &mut *GLOBAL.load(Ordering::Relaxed) }
 	}
 }
 

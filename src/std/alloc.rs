@@ -2,7 +2,7 @@ use core::alloc::{GlobalAlloc, Layout};
 
 use log::trace;
 
-static mut PLACEMENT_ADDR: u32 = 0x200000;
+static mut PLACEMENT_ADDR: u32 = 0x300000;
 static mut MAX_ADDR: u32 = 0x400000;
 
 const PAGE_SIZE: u32 = 0x1000;
@@ -16,7 +16,7 @@ pub fn kmalloc(size: usize, alignment: u32) -> u32 {
 	let ptr = unsafe {
 		let placement = PLACEMENT_ADDR;
 		let next_placement = placement + size as u32;
-		trace!("alloc(0x{placement:0X}, {size})");
+		trace!("alloc(0x{placement:08X}, {size})");
 
 		if next_placement < MAX_ADDR {
 			PLACEMENT_ADDR = next_placement;
