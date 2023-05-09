@@ -93,33 +93,86 @@ outsl_asm:
 	pop ebp
 	ret
 
-;; fn switch_task(task: &Task)
-;; TODO: lol can't switch back
+;; fn switch_task(from: &Registers, to: &Registers)
 global switch_task
 switch_task:
-	push ebp
-	push ebx
-	push esi
-	push edi
+    ; to        + 48 -> Registers { eax[+00], ebx[+04], ecx[+08], edx[+12],
+    ;                               esi[+16], edi[+20], esp[+24], ebp[+28],
+    ;                               eip[+32], eflags[+36], cr3[+40] }
+    ;
+    ; from      + 44 -> Registers { eax[+00], ebx[+04], ecx[+08], edx[+12],
+    ;                               esi[+16], edi[+20], esp[+24], ebp[+28],
+    ;                               eip[+32], eflags[+36], cr3[+40] }
+    ;
+    ; ret       + 40
+    pushad         ; EAX       + 36
+                   ; ECX       + 32
+                   ; EDX       + 28
+                   ; EBX       + 24
+                   ; ESP       + 20
+                   ; EBP       + 16
+                   ; ESI       + 12
+                   ; EDI       + 08
+    pushfd         ; EFLAGS    + 04
+    mov eax, cr3   ;
+    push eax       ; CR3       + 00
 
-	mov esi, [esp + 20] ; task
+    ;; Store current register states into `from`.
+    mov eax, [esp+44]  ; [from]
+    mov [eax+04], ebx  ; from.ebx
+    mov [eax+08], ecx  ; from.ecx
+    mov [eax+12], edx  ; from.edx
+    mov [eax+16], esi  ; from.esi
+    mov [eax+20], edi  ; from.edi
 
-	;; Switch to new task's stack.
-	mov esp, [esi + 4]  ; task.esp
+    mov ebx, [esp+36]  ;
+    mov [eax], ebx     ; from.eax
 
-	;; TODO: All tasks use kernel PD right now.
-	;; Switch to new task's page directory.
-	;; mov eax, [esi + 8]  ; task.cr3
-	;; mov cr3, eax
+    mov ecx, [esp+40]  ; EIP -> ECX
+    mov edx, [esp+20]  ; original ESP -> EDX
+    add edx, 4         ;     and remove return value from stack.
+    mov esi, [esp+16]  ; EBP -> ESI
+    mov edi, [esp+04]  ; EFLAGS -> EDI
 
-	;; TODO: All tasks are kernel mode right now.
-	;; Update TSS (Ring 3 -> Ring 0)
-	;; mov ebx, [esi + 12] ; task.esp0
-	;; mov esp0 into TSS
+    mov [eax+24], edx  ; from.esp
+    mov [eax+28], esi  ; from.ebp
+    mov [eax+32], ecx  ; from.eip
+    mov [eax+36], edi  ; from.eflags
+    pop ebx            ;
+    mov [eax+40], ebx  ; from.cr3
+    push ebx           ;
 
-	pop ebp
-	pop edi
-	pop esi
-	pop ebx
+    ;; Load register state from `to`
+    mov eax, [esp+48]  ; [to]
+    mov ebx, [eax+04]  ; to.ebx
+    mov ecx, [eax+08]  ; to.ecx
+    mov edx, [eax+12]  ; to.edx
+    mov esi, [eax+16]  ; to.esi
+    mov edi, [eax+20]  ; to.edi
+                       ; to.esp later
+    mov ebp, [eax+28]  ; to.ebp
 
-	ret ;; New task EIP popped from its kernel stack.
+    ; eflags
+    push eax ; save `to`
+    mov eax, [eax+36]  ; to.eflags
+    push eax           ;
+    popf               ; load eflags
+    pop eax  ; restore `to`
+
+    ; stack
+    mov esp, [eax+24]  ; to.esp
+
+    ; cr3
+    push eax ; save `to`
+    mov eax, [eax+40]  ; to.cr3
+    mov cr3, eax
+    mov eax, [esp] ; restore and save `to`
+
+    ; eip
+    mov eax, [eax+32]  ; to.eip
+    xchg eax, [esp]    ; push eip (return) and pop `to`
+
+    mov eax, [eax]     ; to.eax
+
+    ret
+

@@ -46,7 +46,7 @@ use crate::{
 };
 use crate::{
 	fs::dev::DeviceFileSystem,
-	proc::{kernel_idle, Task},
+	proc::Task,
 	std::io::{SerialTerminal, VideoTerminal},
 };
 
@@ -114,14 +114,8 @@ pub extern "C" fn kernel_start(
 	fs.mount_root(dosfs.root());
 	fs.mount("DEV", devfs.root());
 
-	// Start the shell.
-	let cwd = fs.find(&fs.root(), "/HOME/USER").unwrap();
-
-	let sh = Task::new(shell::main, cwd);
-	Task::set_current(&sh);
-
-	// TODO: Task switching is busted.
-	shell::main();
-
-	kernel_idle();
+	// Start the shell. I don't expect I shall return. In fact, I mean not to.
+	let cwd = fs.find(fs.root(), "/HOME/USER").unwrap();
+	let sh = Task::new("shell", cwd, shell::main);
+	proc::schedule(&sh);
 }
