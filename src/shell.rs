@@ -1,7 +1,7 @@
 use alloc::vec;
 use core::{cmp::min, fmt::Write};
 
-use log::trace;
+use log::{debug, trace};
 
 use crate::{
 	arch::x86::enable_interrupts, fs::file_descriptor::FileDescriptor,
@@ -37,6 +37,7 @@ pub fn main() {
 				if let Some(dir) = tokens.next().and_then(FileDescriptor::open)
 				{
 					unsafe { (*Task::current()).chdir(&dir) }
+					unsafe { debug!("{}", (*Task::current()).cwd.name()) };
 				}
 			}
 			// Some("ed") => ed_main(),

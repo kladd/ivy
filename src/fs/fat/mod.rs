@@ -83,7 +83,6 @@ pub struct DirectoryEntry {
 	size: u32,
 }
 
-#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct FATFileSystem {
 	pub pb: ParameterBlock,
@@ -200,7 +199,6 @@ impl ParameterBlock {
 	}
 }
 
-#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ParameterBlock {
 	root_entry_count: u16,

@@ -3,7 +3,6 @@ use core::mem;
 
 use crate::fs::{dev::inode::DeviceInode, fat::inode::FATInode};
 
-#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub enum Inode {
 	FAT(FATInode),

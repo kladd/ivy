@@ -9,7 +9,6 @@ use crate::{
 	},
 };
 
-#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct FATInode {
 	// Retains the address of `entry` in its parent directory for updating

@@ -2,7 +2,7 @@ use core::alloc::{GlobalAlloc, Layout};
 
 use log::trace;
 
-static mut PLACEMENT_ADDR: u32 = 0x300000;
+static mut PLACEMENT_ADDR: u32 = 0x200000;
 static mut MAX_ADDR: u32 = 0x400000;
 
 const PAGE_SIZE: u32 = 0x1000;
@@ -33,7 +33,7 @@ pub struct KernelAlloc;
 
 unsafe impl GlobalAlloc for KernelAlloc {
 	unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-		kmalloc(layout.size(), u32::BITS) as *mut u8
+		kmalloc(layout.size(), layout.align() as u32) as *mut u8
 	}
 
 	unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {

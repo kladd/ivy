@@ -1,7 +1,7 @@
 use core::{
 	arch::asm,
-	mem::size_of,
 	ptr,
+	ptr::null_mut,
 	sync::atomic::{AtomicPtr, AtomicU32, Ordering},
 };
 
@@ -14,15 +14,14 @@ use crate::{
 };
 
 static PID_COUNTER: AtomicU32 = AtomicU32::new(0);
-static CURRENT_TASK: AtomicPtr<Task> = AtomicPtr::new(0 as *mut Task);
+static CURRENT_TASK: AtomicPtr<Task> = AtomicPtr::new(null_mut());
 
 #[derive(Debug)]
-#[repr(C)]
 pub struct Task {
 	pid: u32,
 	name: &'static str,
-	pub cwd: Inode,
 	registers: Registers,
+	pub cwd: Inode,
 }
 
 #[repr(C)]
@@ -32,16 +31,12 @@ struct Registers {
 	ebx: u32,
 	ecx: u32,
 	edx: u32,
-
 	esi: u32,
 	edi: u32,
-
 	esp: u32,
 	ebp: u32,
-
 	eip: u32,
-	eflags: u32,
-
+	efl: u32,
 	cr3: u32,
 }
 
@@ -57,7 +52,7 @@ impl Registers {
 				"mov {cr3}, cr3",
 				"pushfd; pop {eflags}",
 				cr3 = out(reg) registers.cr3,
-				eflags = out(reg) registers.eflags
+				eflags = out(reg) registers.efl
 			)
 		};
 
@@ -94,13 +89,13 @@ impl Task {
 	}
 }
 
-pub fn schedule(task: &Task) -> ! {
+pub fn schedule(task: Task) -> ! {
 	disable_interrupts();
-	Task::set_current(task);
+	Task::set_current(&task);
 	unsafe { switch_task(&Registers::new(kernel_idle), &task.registers) };
 	unreachable!();
 }
-//
+
 extern "C" {
 	#[allow(improper_ctypes)]
 	fn switch_task(from: &Registers, to: &Registers) -> u32;

@@ -3,8 +3,8 @@ pub mod fat;
 pub mod file_descriptor;
 pub mod inode;
 
-use alloc::{boxed::Box, vec::Vec};
 use core::{
+	mem::MaybeUninit,
 	ptr::null_mut,
 	sync::atomic::{AtomicPtr, Ordering},
 };
@@ -22,12 +22,13 @@ pub struct MountPoint {
 
 #[derive(Debug)]
 pub struct FileSystem {
-	mounts: Vec<MountPoint>,
+	n_mounts: usize,
+	mounts: [MaybeUninit<MountPoint>; 4],
 }
 
 impl FileSystem {
 	pub fn root(&self) -> &Inode {
-		&self.mounts[0].guest_root_inode
+		unsafe { &self.mounts[0].assume_init_ref().guest_root_inode }
 	}
 
 	// TODO: Result, not option.
@@ -36,7 +37,7 @@ impl FileSystem {
 	}
 
 	pub fn mount_root(&mut self, root: Inode) {
-		assert!(self.mounts.is_empty(), "Root filesystem already mounted");
+		assert_eq!(self.n_mounts, 0, "Root filesystem already mounted");
 		self.mount_inode(None, root);
 	}
 
@@ -80,45 +81,55 @@ impl FileSystem {
 
 impl FileSystem {
 	fn mount_inode(&mut self, host_inode: Option<Inode>, guest_root: Inode) {
-		self.mounts.push(MountPoint {
+		if self.n_mounts >= 4 {
+			panic!("Too many filesystems mounted");
+		}
+		self.mounts[self.n_mounts] = MaybeUninit::new(MountPoint {
 			host_inode_hash: host_inode.map(|inode| inode.hash()),
 			guest_root_inode: guest_root,
 		});
+		self.n_mounts += 1;
 	}
 
 	fn mount_point(&self, node: &Inode) -> Option<Inode> {
-		self.mounts
-			.iter()
-			.find(|mp| {
-				if let Some(hash) = &mp.host_inode_hash {
-					*hash == node.hash()
-				} else {
-					false
+		for i in 0..self.n_mounts {
+			// Safety: n_mounts must represent the number of contiguously
+			//         initialized mounts.
+			let mp = unsafe { self.mounts[i].assume_init_ref() };
+			match mp.host_inode_hash {
+				Some(ref hash) if *hash == node.hash() => {
+					return Some(mp.guest_root_inode.clone())
 				}
-			})
-			.map(|mp| mp.guest_root_inode.clone())
+				_ => continue,
+			}
+		}
+		None
 	}
 }
 
-// static mut GLOBAL: MaybeUninit<Pin<Box<FileSystem>>> = MaybeUninit::uninit();
-
-static GLOBAL: AtomicPtr<FileSystem> = AtomicPtr::new(null_mut());
+static FS: AtomicPtr<FileSystem> = AtomicPtr::new(null_mut());
 
 impl FileSystem {
-	pub fn init() {
-		let fs = Box::new(Self { mounts: Vec::new() });
-		GLOBAL
-			.compare_exchange(
-				null_mut(),
-				Box::leak(fs),
-				Ordering::Acquire,
-				Ordering::Relaxed,
-			)
-			.unwrap();
+	pub fn new() -> Self {
+		FileSystem {
+			n_mounts: 0,
+			// Safety: yes.
+			mounts: unsafe { MaybeUninit::uninit().assume_init() },
+		}
 	}
 
-	pub fn current() -> &'static mut FileSystem {
-		unsafe { &mut *GLOBAL.load(Ordering::Relaxed) }
+	pub fn set(fs: &FileSystem) {
+		FS.compare_exchange(
+			null_mut(),
+			fs as *const _ as *mut _,
+			Ordering::SeqCst,
+			Ordering::SeqCst,
+		)
+		.unwrap();
+	}
+
+	pub fn current() -> *mut Self {
+		FS.load(Ordering::Relaxed)
 	}
 }
 

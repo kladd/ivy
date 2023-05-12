@@ -38,16 +38,14 @@ use crate::{
 		virtual_memory::init_kernel_page_tables,
 	},
 	devices::{keyboard::init_keyboard, serial::init_serial},
-	fs::{fat::FATFileSystem, FileSystem},
+	fs::{dev::DeviceFileSystem, fat::FATFileSystem, FileSystem},
 	logger::KernelLogger,
 	multiboot::{MultibootFlags, MultibootInfo},
-	// proc::{schedule, Task},
-	std::alloc::KernelAlloc,
-};
-use crate::{
-	fs::dev::DeviceFileSystem,
 	proc::Task,
-	std::io::{SerialTerminal, VideoTerminal},
+	std::{
+		alloc::KernelAlloc,
+		io::{SerialTerminal, VideoTerminal},
+	},
 };
 
 pub const MULTIBOOT_MAGIC: u32 = 0x2BADB002;
@@ -102,7 +100,6 @@ pub extern "C" fn kernel_start(
 
 	init_ide();
 
-	FileSystem::init();
 	VideoTerminal::init();
 	SerialTerminal::init();
 
@@ -110,12 +107,15 @@ pub extern "C" fn kernel_start(
 	let dosfs = FATFileSystem::new(0);
 	let devfs = DeviceFileSystem;
 
-	let fs = FileSystem::current();
+	let mut fs = FileSystem::new();
 	fs.mount_root(dosfs.root());
 	fs.mount("DEV", devfs.root());
 
-	// Start the shell. I don't expect I shall return. In fact, I mean not to.
 	let cwd = fs.find(fs.root(), "/HOME/USER").unwrap();
+	FileSystem::set(&fs);
+
 	let sh = Task::new("shell", cwd, shell::main);
-	proc::schedule(&sh);
+
+	// Start the shell. I don't expect I shall return. In fact, I mean not to.
+	proc::schedule(sh);
 }

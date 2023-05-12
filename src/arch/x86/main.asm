@@ -165,7 +165,7 @@ switch_task:
     ; cr3
     push eax ; save `to`
     mov eax, [eax+40]  ; to.cr3
-    mov cr3, eax
+;    mov cr3, eax
     mov eax, [esp] ; restore and save `to`
 
     ; eip

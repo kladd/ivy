@@ -9,7 +9,6 @@ use crate::{
 	std::io::{SerialTerminal, VideoTerminal},
 };
 
-#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub enum DeviceInode {
 	Root,

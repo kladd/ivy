@@ -15,7 +15,7 @@ pub struct FileDescriptor {
 impl FileDescriptor {
 	pub fn open(path: &str) -> Option<Self> {
 		let task = unsafe { &*Task::current() };
-		let fs = FileSystem::current();
+		let fs = unsafe { &*FileSystem::current() };
 
 		Some(Self {
 			offset: 0,
