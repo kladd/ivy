@@ -14,7 +14,8 @@ use log::{debug, error, info};
 
 use crate::{
 	arch::amd64::{
-		cli, clock::init_clock, hlt, interrupts::init_idt, pic::init_pic, sti,
+		cli, clock::init_clock, hlt, idt::init_idt, pic::init_pic, sti,
+		vmem::PageTable,
 	},
 	devices::serial::init_serial,
 	logger::KernelLogger,

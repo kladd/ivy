@@ -1,8 +1,10 @@
 use crate::{
+	arch::amd64::{
+		idt::{register_handler, Interrupt},
+		inb, outb,
+	},
 	devices::character::{Keycode, ReadCharacter},
 };
-use crate::arch::amd64::interrupts::{Interrupt, register_handler};
-use crate::arch::amd64::{inb, outb};
 
 const NUL: char = 0 as char;
 
@@ -51,7 +53,6 @@ pub struct Keyboard<const N: usize> {
 
 impl<const N: usize> ReadCharacter for Keyboard<N> {
 	fn getc(&mut self) -> Option<Keycode> {
-		kdbg!()
 		if self.index == 0 {
 			None
 		} else {
@@ -97,38 +98,40 @@ fn mod_ctrl() -> bool {
 	unsafe { MODS & MOD_CTRL != 0 }
 }
 
-unsafe extern "x86-interrupt" fn irq_handler(_: Interrupt) {
+extern "x86-interrupt" fn irq_handler(_: Interrupt) {
 	while keyboard_has_data() {
-		match keyboard_read_scan_code() {
-			0x38 => MODS |= MOD_ALT,
-			0x1D => MODS |= MOD_CTRL,
-			0x2A => MODS |= MOD_SHIFT,
+		unsafe {
+			match keyboard_read_scan_code() {
+				0x38 => MODS |= MOD_ALT,
+				0x1D => MODS |= MOD_CTRL,
+				0x2A => MODS |= MOD_SHIFT,
 
-			0xB8 => MODS &= !MOD_ALT,
-			0x9D => MODS &= !MOD_CTRL,
-			0xAA => MODS &= !MOD_SHIFT,
+				0xB8 => MODS &= !MOD_ALT,
+				0x9D => MODS &= !MOD_CTRL,
+				0xAA => MODS &= !MOD_SHIFT,
 
-			0x16 if mod_ctrl() => KBD.putc(Keycode::Nak),
-			0x1E if mod_ctrl() => KBD.putc(Keycode::StartOfHeading),
-			0x25 if mod_ctrl() => KBD.putc(Keycode::VerticalTab),
-			0x26 if mod_ctrl() => KBD.putc(Keycode::FormFeed),
+				0x16 if mod_ctrl() => KBD.putc(Keycode::Nak),
+				0x1E if mod_ctrl() => KBD.putc(Keycode::StartOfHeading),
+				0x25 if mod_ctrl() => KBD.putc(Keycode::VerticalTab),
+				0x26 if mod_ctrl() => KBD.putc(Keycode::FormFeed),
 
-			0x0E => KBD.putc(Keycode::Backspace),
-			0x1C => KBD.putc(Keycode::Newline),
+				0x0E => KBD.putc(Keycode::Backspace),
+				0x1C => KBD.putc(Keycode::Newline),
 
-			scan_code if is_key_down(scan_code) => {
-				let c = if mod_shift() {
-					ASCII_MOD_SHIFT[scan_code as usize]
-				} else {
-					ASCII_NO_MOD[scan_code as usize]
-				};
+				scan_code if is_key_down(scan_code) => {
+					let c = if mod_shift() {
+						ASCII_MOD_SHIFT[scan_code as usize]
+					} else {
+						ASCII_NO_MOD[scan_code as usize]
+					};
 
-				if c != NUL {
-					KBD.putc(Keycode::Char(c))
+					if c != NUL {
+						KBD.putc(Keycode::Char(c))
+					}
 				}
-			}
 
-			_ => continue,
+				_ => continue,
+			}
 		}
 	}
 

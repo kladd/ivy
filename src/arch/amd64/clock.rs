@@ -3,9 +3,8 @@ use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use log::trace;
 
 use crate::arch::amd64::{
-	inb,
-	interrupts::{register_handler, Interrupt},
-	outb,
+	idt::{register_handler, Interrupt},
+	inb, outb,
 };
 
 const PIT_FREQ: u32 = 18;
