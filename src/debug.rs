@@ -1,0 +1,18 @@
+#[allow(unused_macros)]
+#[macro_export]
+macro_rules! kdbg {
+	() => {
+		::log::debug!("").unwrap();
+	};
+	($val:expr $(,)?) => {
+		match $val {
+			v => {
+				::log::debug!("{} = {v:#?}", stringify!($val));
+				v
+			}
+		}
+	};
+	($($val:expr),+ $(,)?) => {
+		($($crate::kdbg!($val)),+,)
+	};
+}
