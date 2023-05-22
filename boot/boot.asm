@@ -1,13 +1,15 @@
 BITS 32
 
-MAX_KERNEL_SIZE equ 0x1000000
-
 section .multiboot
 multiboot_start:
 	dd 0x1BADB002                  ; MULTIBOOT_MAGIC
-	dd 3                           ; ALIGN | MEMINFO
-	dd -(3+0x1BADB002)             ; CHECKSUM
+	dd 7                           ; ALIGN | MEMINFO
+	dd -(7+0x1BADB002)             ; CHECKSUM
 	dd 0,0,0,0,0                   ; Unused.
+	dd 0
+	dd 1024
+	dd 768
+	dd 32
 multiboot_end:
 
 section .bss
@@ -49,8 +51,14 @@ pd_table_setup:
 	or eax, 0x83                   ; Present writable huge page
 	mov [pd_table + ecx * 8], eax
 	inc ecx
-	cmp ecx, (MAX_KERNEL_SIZE / 0x200000)
+	cmp ecx, 4
 	jne pd_table_setup.loop
+;; HACK: ID map the framebuffer (where we know it will be)
+	mov eax, 0xFD000083
+	mov [pd_table + ecx * 8], eax
+	inc ecx
+	mov eax, 0xFD200083
+	mov [pd_table + ecx * 8], eax
 enable_paging:
 	mov eax, pml4_table            ; Set pml4 address in cr3
 	mov cr3, eax

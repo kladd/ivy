@@ -96,12 +96,11 @@ impl IDTR {
 }
 
 extern "x86-interrupt" fn print_irq(interrupt: Interrupt) {
-	crate::kdbg!(interrupt);
+	panic!("{interrupt:#?}");
 }
 
 extern "x86-interrupt" fn print_irq_code(interrupt: Interrupt, error: usize) {
-	crate::kdbg!(interrupt);
-	crate::kdbg!(error);
+	panic!("{interrupt:#?} {error:#?}");
 }
 
 pub fn register_handler(
