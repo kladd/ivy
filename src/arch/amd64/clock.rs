@@ -1,6 +1,4 @@
-use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-
-use log::trace;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::arch::amd64::{
 	idt::{register_handler, Interrupt},

@@ -3,6 +3,7 @@ use core::arch::asm;
 pub mod clock;
 pub mod idt;
 pub mod pic;
+pub mod vmem;
 
 pub fn sti() {
 	unsafe { asm!("sti") }

@@ -29,7 +29,6 @@ run: $(rom)
 		-m 2g \
 		-no-reboot \
 		-no-shutdown \
-		-d int \
 		-serial stdio
 .PHONY: clean
 clean:

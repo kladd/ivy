@@ -1,9 +1,5 @@
 use core::{arch::asm, mem::size_of};
 
-use log::debug;
-
-use crate::arch::amd64::{inb, outb};
-
 const MAX_INTERRUPTS: usize = 256;
 
 static mut DESCRIPTOR_TABLE: [InterruptEntry; MAX_INTERRUPTS] =

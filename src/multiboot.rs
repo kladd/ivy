@@ -1,5 +1,3 @@
-use log::debug;
-
 const MEM_INFO_FLAG: u32 = 0x1;
 
 #[derive(Debug)]

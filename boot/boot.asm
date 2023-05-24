@@ -18,10 +18,13 @@ kernel_stack_bottom:
 	resb 16384
 kernel_stack_top:
 align 4096
+global pml4_table
 pml4_table:
 	resb 4096
+global pdp_table
 pdp_table:
 	resb 4096
+global pd_table
 pd_table:
 	resb 4096
 
@@ -53,12 +56,6 @@ pd_table_setup:
 	inc ecx
 	cmp ecx, 4
 	jne pd_table_setup.loop
-;; HACK: ID map the framebuffer (where we know it will be)
-	mov eax, 0xFD000083
-	mov [pd_table + ecx * 8], eax
-	inc ecx
-	mov eax, 0xFD200083
-	mov [pd_table + ecx * 8], eax
 enable_paging:
 	mov eax, pml4_table            ; Set pml4 address in cr3
 	mov cr3, eax
