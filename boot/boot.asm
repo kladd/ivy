@@ -37,27 +37,8 @@ stack_setup:                           ; Create first kernel stack.
 	xor ebp, ebp
 	mov esi, ebx                   ; Save multiboot magic + flags.
 	mov edi, eax                   ; (in long mode these will be arguments)
-page_table_setup:
-pml4_table_setup:
-	mov eax, pdp_table
-	or eax, 0x3
-	mov [pml4_table], eax
-pdp_table_setup:
-	mov eax, pd_table
-	or eax, 0x3
-	mov [pdp_table], eax
-pd_table_setup:
-	mov ecx, 0
-.loop:
-	mov eax, 0x200000
-	mul ecx
-	or eax, 0x83                   ; Present writable huge page
-	mov [pd_table + ecx * 8], eax
-	inc ecx
-	cmp ecx, 4
-	jne pd_table_setup.loop
 enable_paging:
-	mov eax, pml4_table            ; Set pml4 address in cr3
+	mov eax, boot_pml4             ; Set pml4 address in cr3
 	mov cr3, eax
 
 	mov eax, cr4                   ; Set PAE flag
@@ -75,6 +56,18 @@ enable_paging:
 
 	lgdt [gdt64.ptr]
 	jmp GDT64_CS:start_long_mode
+
+section .data
+align 0x1000
+boot_pd:
+	times 4 dq 0x83
+	times 508 dq 0
+boot_pdp:
+	dq boot_pd + 0x3
+	times 511 dq 0
+boot_pml4:
+	dq boot_pdp + 0x3
+	times 511 dq 0
 
 section .rodata
 gdt64:
