@@ -8,20 +8,13 @@ BITS 32
 section .multiboot
 multiboot_start:
 	dd 0x1BADB002                  ; MULTIBOOT_MAGIC
-	dd 3                           ; ALIGN | MEMINFO
-	dd -(3+0x1BADB002)             ; CHECKSUM
-
-;	dd multiboot_start - KERNEL_VMA
-;	dd _kernel_start - KERNEL_VMA
-;	dd 0
-;	dd _kernel_end - KERNEL_VMA
-;	dd _start - KERNEL_VMA
+	dd 7                           ; ALIGN | MEMINFO
+	dd -(7+0x1BADB002)             ; CHECKSUM
 	dd 0,0,0,0,0
-
-	dd 0
-	dd 1024
-	dd 768
-	dd 32
+	dd 0                           ; Linear buffer
+	dd 1024                        ; width
+	dd 768                         ; height
+	dd 32                          ; color depth
 multiboot_end:
 
 section .bss
@@ -60,6 +53,33 @@ enable_paging:
 	lgdt [gdt64.ptr - KERNEL_VMA]
 	jmp 0x08:start_long_mode - KERNEL_VMA
 
+BITS 64
+section .text
+extern kernel_start
+start_long_mode:
+	mov ax, 0                      ; Zero out segment registers
+	mov ss, ax
+	mov ds, ax
+	mov es, ax
+	mov gs, ax
+	mov fs, ax
+
+	mov rax, start_long_mode_high  ; abs jump to high memory
+	jmp rax
+start_long_mode_high:
+	mov rsp, kernel_stack_top      ; set the stack back to high memory
+	add rsi, KERNEL_VMA            ; adjust the multiboot header to high
+	                               ; mem also
+
+	mov qword [boot_pml4], 0       ; unmap low memory
+	mov qword [boot_pdp], 0        ;
+	invlpg [0]                     ;
+	lgdt [gdt64_high.ptr]          ; load a GDT in high space
+
+	call kernel_start
+idle:	hlt
+	jmp idle
+
 section .data
 align 0x1000
 boot_pd:
@@ -84,22 +104,11 @@ gdt64:
 	dw $ - gdt64 - 1
 	dq gdt64 - KERNEL_VMA
 
-BITS 64
-section .text
-extern kernel_start
-start_long_mode:
-	mov ax, 0                      ; Zero out segment registers
-	mov ss, ax
-	mov ds, ax
-	mov es, ax
-	mov gs, ax
-	mov fs, ax
-	mov rax, start_long_mode_high  ; long jump to high memory
-	jmp rax
-start_long_mode_high:
-	mov rsp, kernel_stack_top      ; set the stack back to high memory
-	add rsi, KERNEL_VMA            ; adjust the multiboot header to high
-	                               ; mem also
-	call kernel_start
-idle:	hlt
-	jmp idle
+gdt64_high:
+	dq 0
+.code:
+	dq (1<<43) | (1<<44) | (1<<47) | (1<<53)
+.ptr:
+	dw $ - gdt64 - 1
+	dq gdt64
+
