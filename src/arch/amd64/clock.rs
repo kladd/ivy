@@ -1,5 +1,7 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
+use log::debug;
+
 use crate::arch::amd64::{
 	idt::{register_handler, Interrupt},
 	inb, outb,
@@ -21,6 +23,7 @@ const RTC_CENTURY: u8 = 0x32;
 static CLOCK: AtomicU64 = AtomicU64::new(0);
 
 pub fn init_clock() {
+	debug!("{:016X?}", handle_interval_timer as u64);
 	// Set interval interrupt handler.
 	register_handler(32, handle_interval_timer);
 }

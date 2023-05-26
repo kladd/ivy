@@ -10,7 +10,10 @@ pub struct MultibootInfo {
 	pub cmdline: u32,
 	pub mods_count: u32,
 	pub mods_addr: u32,
-	pub elf_sec: [u32; 4],
+	pub elf_num: u32,
+	pub elf_size: u32,
+	pub elf_addr: u32,
+	pub elf_shndx: u32,
 	pub mmap_length: u32,
 	pub mmap_addr: u32,
 	pub drives_length: u32,
@@ -38,4 +41,12 @@ pub struct MultibootInfo {
 	pub framebuffer_green_mask_size: u8,
 	pub framebuffer_blue_field_position: u8,
 	pub framebuffer_blue_mask_size: u8,
+}
+
+#[repr(C)]
+pub struct MultibootModuleEntry {
+	pub start: u32,
+	pub end: u32,
+	pub string: u32,
+	reserved: u32,
 }

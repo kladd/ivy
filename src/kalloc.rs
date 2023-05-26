@@ -1,6 +1,6 @@
 use core::alloc::{GlobalAlloc, Layout};
 
-use log::trace;
+use log::{debug, trace};
 
 use crate::sync::SpinLock;
 
@@ -18,6 +18,7 @@ static KERNEL_ALLOCATOR: SpinLock<KernelAllocator> =
 
 impl SpinLock<KernelAllocator> {
 	pub fn init(&self, placement: usize, max: usize) {
+		debug!("init(0x{placement:016X})");
 		let mut guard = self.lock();
 		guard.max = max;
 		guard.placement = placement;
@@ -51,5 +52,12 @@ unsafe impl GlobalAlloc for SpinLock<KernelAllocator> {
 }
 
 pub fn init_kalloc(placement: usize, size: usize) {
-	KERNEL_ALLOCATOR.init(placement, placement + size);
+	KERNEL_ALLOCATOR.init((placement & !4095) + 4096, placement + size);
+}
+
+pub fn kmalloc(size: usize, align: usize) -> usize {
+	unsafe {
+		KERNEL_ALLOCATOR.alloc(Layout::from_size_align(size, align).unwrap())
+			as usize
+	}
 }

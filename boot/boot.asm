@@ -57,12 +57,6 @@ BITS 64
 section .text
 extern kernel_start
 start_long_mode:
-	mov ax, 0                      ; Zero out segment registers
-	mov ss, ax
-	mov ds, ax
-	mov es, ax
-	mov gs, ax
-	mov fs, ax
 
 	mov rax, start_long_mode_high  ; abs jump to high memory
 	jmp rax
@@ -75,6 +69,13 @@ start_long_mode_high:
 	mov qword [boot_pdp], 0        ;
 	invlpg [0]                     ;
 	lgdt [gdt64_high.ptr]          ; load a GDT in high space
+resume:
+	mov ax, gdt64_high.data
+	mov ss, ax
+	mov ds, ax
+	mov es, ax
+	mov gs, ax
+	mov fs, ax
 
 	call kernel_start
 idle:	hlt
@@ -105,10 +106,17 @@ gdt64:
 	dq gdt64 - KERNEL_VMA
 
 gdt64_high:
+.null:	equ $ - gdt64_high
 	dq 0
-.code:
+.code:	equ $ - gdt64_high
 	dq (1<<43) | (1<<44) | (1<<47) | (1<<53)
+.data:	equ $ - gdt64_high
+	dq (1<<41) | (1<<44) | (1<<47)
+.ucode:	equ $ - gdt64_high
+	dq (1<<43) | (1<<44) | (1<<46) | (1<<47) | (1<<53)
+.udata:	equ $ - gdt64_high
+	dq (1<<41) | (1<<44) | (1<<46) | (1<<47)
 .ptr:
-	dw $ - gdt64 - 1
-	dq gdt64
+	dw $ - gdt64_high - 1
+	dq gdt64_high
 

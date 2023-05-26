@@ -1,10 +1,15 @@
 use core::{arch::asm, mem::size_of};
 
+use log::debug;
+
+use crate::kdbg;
+
 const MAX_INTERRUPTS: usize = 256;
 
 static mut DESCRIPTOR_TABLE: [InterruptEntry; MAX_INTERRUPTS] =
 	[InterruptEntry::default(); MAX_INTERRUPTS];
 
+#[derive(Debug)]
 #[repr(packed)]
 pub(super) struct IDTR {
 	_limit: u16,
@@ -58,12 +63,13 @@ impl InterruptEntry {
 
 pub fn init_idt() {
 	unsafe {
+		debug!("{:016X?}", print_irq as usize);
 		register_handler(1, print_irq);
 		register_handler(2, print_irq);
 		register_handler(3, print_irq);
 		register_handler(4, print_irq);
 		register_handler(5, print_irq);
-		register_handler(6, print_irq);
+		register_handler(6, invalid_opcode);
 		register_handler(7, print_irq);
 		register_handler_code(8, print_irq_code);
 		register_handler(9, print_irq);
@@ -93,6 +99,10 @@ impl IDTR {
 
 extern "x86-interrupt" fn print_irq(interrupt: Interrupt) {
 	panic!("{interrupt:#?}");
+}
+
+extern "x86-interrupt" fn invalid_opcode(interrupt: Interrupt) {
+	panic!("#UD({:016X}): {interrupt:#?}", interrupt.rip);
 }
 
 extern "x86-interrupt" fn print_irq_code(interrupt: Interrupt, error: usize) {
@@ -126,6 +136,6 @@ pub fn register_handler_code(
 }
 
 unsafe fn flush_idt() {
-	let idtr = IDTR::new(&DESCRIPTOR_TABLE);
+	let idtr = kdbg!(IDTR::new(&DESCRIPTOR_TABLE));
 	asm!("lidt [rax]", in("rax") &idtr);
 }
