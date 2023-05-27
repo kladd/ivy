@@ -1,6 +1,7 @@
 #![no_std]
 #![feature(abi_x86_interrupt)]
 #![feature(allocator_api)]
+#![feature(naked_functions)]
 // TODO: Un-suppress these warnings.
 #![allow(dead_code)]
 #![allow(unused_variables)]
@@ -107,9 +108,14 @@ pub extern "C" fn kernel_start(
 	}
 }
 
+#[no_mangle]
+#[naked]
+pub unsafe extern "C" fn handle_syscall() {
+	asm!("mov r12, 0xdecafbad; ud2", options(noreturn));
+}
+
 fn say_hello() {
-	info!("hello from userland?");
-	cli();
+	unsafe { asm!("mov r8, 0xdeadbeef; syscall") };
 }
 
 extern "C" {
