@@ -1,4 +1,4 @@
-KERNEL_VMA equ 0xffffffff80000000
+KERNEL_VMA equ 0xFFFFFF7F80000000
 
 extern _kernel_start
 extern _kernel_end
@@ -63,13 +63,17 @@ start_long_mode:
 	jmp rax
 start_long_mode_high:
 	mov rsp, kernel_stack_top      ; set the stack back to high memory
-	add rsi, KERNEL_VMA            ; adjust the multiboot header to high
-	                               ; mem also
 
-	mov qword [boot_pml4], 0       ; unmap low memory
-	mov qword [boot_pdp], 0        ;
+	mov rax, qword KERNEL_VMA
+	add rsi, rax                   ; adjust the multiboot header to high
+	                               ; mem also
+	mov rax, qword boot_pml4
+	mov rdx, qword boot_pdp
+	mov qword [rax], 0             ; unmap low memory
+	mov qword [rdx], 0             ;
 	invlpg [0]                     ;
-	lgdt [gdt64.ptr_high]          ; load a GDT in high space
+	mov rax, qword gdt64.ptr_high
+	lgdt [rax]          ; load a GDT in high space
 resume:
 	mov ax, gdt64.data
 	mov ss, ax
@@ -112,8 +116,9 @@ boot_pdp:
 	dq 0
 boot_pml4:
 	dq boot_pdp + 0x3 - KERNEL_VMA
-	times 510 dq 0
+	times 509 dq 0
 	dq boot_pdp + 0x7 - KERNEL_VMA
+	dq boot_pml4 + 0x3 - KERNEL_VMA
 
 gdt64:
 .kernel:              ; 0
