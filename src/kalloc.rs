@@ -1,10 +1,10 @@
 use core::alloc::{GlobalAlloc, Layout};
 
-use log::{debug, trace};
+use log::{debug, info, trace};
 
 use crate::sync::SpinLock;
 
-struct KernelAllocator {
+pub struct KernelAllocator {
 	placement: usize,
 	max: usize,
 }
@@ -18,10 +18,10 @@ static KERNEL_ALLOCATOR: SpinLock<KernelAllocator> =
 
 impl SpinLock<KernelAllocator> {
 	pub fn init(&self, placement: usize, max: usize) {
-		debug!("init(0x{placement:016X})");
 		let mut guard = self.lock();
 		guard.max = max;
 		guard.placement = placement;
+		info!("KernelAllocator(0x{:016X} - 0x{:016X})", placement, max);
 	}
 }
 
@@ -29,12 +29,12 @@ unsafe impl GlobalAlloc for SpinLock<KernelAllocator> {
 	unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
 		let mut guard = self.lock();
 		let align = layout.align();
-		guard.placement = (guard.placement & !(align - 1)) + align;
+		guard.placement = kdbg!((guard.placement & !(align - 1)) + align);
 
 		let placement = guard.placement;
 		let next_placement = placement + layout.size();
 
-		let ptr = if next_placement < guard.max {
+		let ptr = if next_placement < kdbg!(guard.max) {
 			guard.placement = next_placement;
 			guard.placement
 		} else {
@@ -51,8 +51,11 @@ unsafe impl GlobalAlloc for SpinLock<KernelAllocator> {
 	}
 }
 
-pub fn init_kalloc(placement: usize, size: usize) {
-	KERNEL_ALLOCATOR.init((placement & !4095) + 4096, placement + size);
+impl KernelAllocator {
+	pub fn init(placement: usize, size: usize) {
+		let aligned = (placement & !(0x200000 - 1)) + 0x200000;
+		KERNEL_ALLOCATOR.init(aligned, aligned + size);
+	}
 }
 
 pub fn kmalloc(size: usize, align: usize) -> usize {

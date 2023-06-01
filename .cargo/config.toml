@@ -1,5 +1,10 @@
 [build]
 target = "x86_64-unknown-lucy.json"
+rustflags = [
+    "-L", "target",
+    "-l", "boot",
+    "-C", "link-args=-n -Tboot/linker.ld"
+]
 
 [unstable]
 build-std = ["alloc", "core", "compiler_builtins"]

@@ -9,5 +9,8 @@
     "disable-redzone": true,
     "features": "-mmx,-sse,+soft-float",
     "panic-strategy": "abort",
-    "code-model": "kernel"
+    "code-model": "kernel",
+    "static-position-independent-executables": true,
+    "linker": "rust-lld",
+    "linker-flavor": "ld.lld"
 }

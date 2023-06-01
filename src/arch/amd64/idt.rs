@@ -1,4 +1,8 @@
-use core::{arch::asm, mem::size_of};
+use core::{
+	arch::asm,
+	fmt::{Debug, Formatter},
+	mem::size_of,
+};
 
 use log::debug;
 
@@ -17,7 +21,6 @@ pub(super) struct IDTR {
 }
 
 #[repr(C)]
-#[derive(Debug)]
 pub struct Interrupt {
 	rip: usize,
 	cs: usize,
@@ -105,6 +108,13 @@ extern "x86-interrupt" fn invalid_opcode(interrupt: Interrupt) {
 	panic!("#UD({:016X}): {interrupt:#?}", interrupt.rip);
 }
 
+extern "x86-interrupt" fn page_fault(interrupt: Interrupt, error: usize) {
+	panic!(
+		"#PF({:016X}, error: {error:016X}): {interrupt:#?}",
+		interrupt.rip
+	);
+}
+
 extern "x86-interrupt" fn print_irq_code(interrupt: Interrupt, error: usize) {
 	panic!("{interrupt:#?} {error:#?}");
 }
@@ -138,4 +148,16 @@ pub fn register_handler_code(
 unsafe fn flush_idt() {
 	let idtr = kdbg!(IDTR::new(&DESCRIPTOR_TABLE));
 	asm!("lidt [rax]", in("rax") &idtr);
+}
+
+impl Debug for Interrupt {
+	fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+		f.debug_struct("Interrupt")
+			.field("rip", &format_args!("0x{:016x}", self.rip))
+			.field("cs", &format_args!("0x{:04x}", self.cs))
+			.field("rflags", &format_args!("0x{:016x}", self.rflags))
+			.field("rsp", &format_args!("0x{:016x}", self.rsp))
+			.field("ss", &format_args!("0x{:04x}", self.ss))
+			.finish()
+	}
 }

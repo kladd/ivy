@@ -1,4 +1,4 @@
-KERNEL_VMA equ 0xFFFFFF7F80000000
+KERNEL_VMA equ 0xFFFFFFFF80000000
 
 extern _kernel_start
 extern _kernel_end
@@ -100,6 +100,8 @@ init_syscalls:
 	mov eax, 0x200
 	wrmsr
 
+	mov r15, 0xffffffff801a9f88
+	sub r15, 0x38
 	call kernel_start
 idle:	hlt
 	jmp idle
@@ -107,18 +109,22 @@ idle:	hlt
 section .data
 align 0x1000
 boot_pd:
-	times 4 dq 0x87
+	dq 0x83
+	dq 0x200083
+	dq 0x400083
+	dq 0x600083
 	times 508 dq 0
 boot_pdp:
 	dq boot_pd + 0x3 - KERNEL_VMA
 	times 509 dq 0
-	dq boot_pd + 0x7 - KERNEL_VMA
+	dq boot_pd + 0x3 - KERNEL_VMA
 	dq 0
+global boot_pml4
 boot_pml4:
 	dq boot_pdp + 0x3 - KERNEL_VMA
-	times 509 dq 0
-	dq boot_pdp + 0x7 - KERNEL_VMA
-	dq boot_pml4 + 0x3 - KERNEL_VMA
+	times 510 dq 0
+	dq boot_pdp + 0x3 - KERNEL_VMA
+;	dq boot_pml4 + 0x3 - KERNEL_VMA
 
 gdt64:
 .kernel:              ; 0
