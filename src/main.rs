@@ -13,6 +13,7 @@ mod arch;
 #[macro_use]
 mod debug;
 mod devices;
+mod font;
 mod kalloc;
 mod logger;
 mod mem;
@@ -20,7 +21,7 @@ mod multiboot;
 mod proc;
 mod sync;
 
-use core::{arch::asm, panic::PanicInfo, ptr, sync::atomic::Ordering};
+use core::{arch::asm, panic::PanicInfo, ptr, slice};
 
 use log::{debug, error, info};
 
@@ -30,6 +31,7 @@ use crate::{
 		vmem::PageTable,
 	},
 	devices::{serial::init_serial, video::Video},
+	font::PSF2Font,
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
 	mem::{frame::FrameAllocator, page::Page, PhysicalAddress, KERNEL_BASE},
@@ -69,13 +71,19 @@ pub extern "C" fn kernel_start(
 	sti();
 
 	// Load user program from initrd since we don't have a filesystem yet.
-	let initrd_mod: &MultibootModuleEntry = unsafe {
-		&*(PhysicalAddress(multiboot_info.mods_addr as usize).to_virtual())
+	let mods: &[MultibootModuleEntry] = unsafe {
+		slice::from_raw_parts(
+			PhysicalAddress(multiboot_info.mods_addr as usize).to_virtual(),
+			multiboot_info.mods_count as usize,
+		)
 	};
-	kdbg!(initrd_mod);
 
-	// let mut screen = Video::new(0x800000);
-	// screen.test();
+	let font: &PSF2Font =
+		unsafe { &*PhysicalAddress(mods[1].start as usize).to_virtual() };
+	font.debug('&');
+
+	let mut screen = Video::new(PhysicalAddress(0x800000).to_virtual(), font);
+	screen.test();
 	info!("kernel_end: 0x{:016X}", _kernel_end as usize);
 
 	// panic!();
@@ -89,9 +97,9 @@ pub extern "C" fn kernel_start(
 	// Load task code into 4MB (arbitrarily chosen entry point).
 	unsafe {
 		ptr::copy_nonoverlapping(
-			PhysicalAddress(initrd_mod.start as usize).to_virtual(),
+			PhysicalAddress(mods[0].start as usize).to_virtual(),
 			0x400000 as *mut u8,
-			(initrd_mod.end - initrd_mod.start) as usize,
+			(mods[0].end - mods[0].start) as usize,
 		);
 	}
 	// SYSRET to user program.

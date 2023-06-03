@@ -5,6 +5,7 @@
 #  - grub-pc-bin
 #  - qemu
 #  - ld
+#  - rustc
 
 tgt := target
 rom := $(tgt)/lucy.rom
@@ -14,26 +15,37 @@ boot_lib := $(tgt)/libboot.a
 initrd := $(tgt)/lucy.initrd
 
 all: $(rom)
+$(tgt):
+	mkdir -p $(tgt)
 
-$(tgt)/boot.o: boot/boot.asm
-	mkdir -p $(tgt)
+# ASM files are packaged into libboot.a and statically linked with the kernel
+# executable.
+$(tgt)/boot.o: boot/boot.asm $(tgt)
 	nasm -felf64 $< -o $@
-$(tgt)/syscall.o: src/arch/amd64/syscall.asm
-	mkdir -p $(tgt)
+$(tgt)/syscall.o: src/arch/amd64/syscall.asm $(tgt)
 	nasm -felf64 $< -o $@
+$(boot_lib): $(tgt)/boot.o $(tgt)/syscall.o
+	ar rvs $@ $^
+
+# Kernel binary.
+$(kernel): always $(boot_lib)
+	cargo build
+
+# Test user program is assembled without linking, loaded into ramdisk by GRUB.
 $(initrd): user/user.asm
 	mkdir -p $(tgt)
 	nasm -o $@ $<
+
+# Kernel boots from ROM.
+# TODO: A font.
 $(rom): boot/grub.cfg $(kernel) $(initrd)
 	mkdir -p $(tgt)/rom/boot/grub
 	cp boot/grub.cfg $(tgt)/rom/boot/grub/grub.cfg
 	cp $(kernel) $(tgt)/rom/boot/lucy
 	cp $(initrd) $(tgt)/rom/boot/lucy.initrd
+	gunzip -c /usr/share/kbd/consolefonts/sun12x22.psfu.gz > $(tgt)/rom/boot/font.psfu
 	grub-mkrescue -o $(rom) $(tgt)/rom
-$(kernel): always $(boot_lib)
-	cargo build
-$(boot_lib): $(tgt)/boot.o $(tgt)/syscall.o
-	ar rvs $@ $^
+
 run: $(rom)
 	qemu-system-x86_64$(exe) -cdrom $(rom) \
 		-cpu qemu64,+fsgsbase \
