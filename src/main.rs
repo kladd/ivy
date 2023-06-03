@@ -78,7 +78,7 @@ pub extern "C" fn kernel_start(
 	init_pic();
 	init_clock();
 
-	// sti();
+	sti();
 
 	// let mut screen = Video::new(0x800000);
 	// screen.test();
@@ -101,9 +101,9 @@ pub extern "C" fn kernel_start(
 			r#"
 	cli
 	mov rsp, r11
-	mov r11, 0x002
+	mov r11, 0x202
 	sysretq
-	"#, in("r11") 0x404000, in("rcx") 0x400000
+	"#, in("r11") task.rsp, in("rcx") task.rip
 		)
 	}
 	// TODO: Why the hell does this stack need to be so large?
@@ -162,9 +162,10 @@ fn dump_pt(pt: *mut PageTable, level: PageTableLevel) {
 }
 
 #[no_mangle]
-#[naked]
 pub unsafe extern "C" fn handle_syscall() {
-	asm!("mov r12, 0xdecafbad; ud2", options(noreturn));
+	asm!("mov r12, 0xdecafbad");
+	sti();
+	hlt();
 }
 
 // Assembled as USER_PROGRAM, this does nothing but document what that array

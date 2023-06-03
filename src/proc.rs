@@ -19,7 +19,7 @@ use crate::{
 		vmem::{PageTable, BOOT_PML4_TABLE},
 	},
 	kalloc::kmalloc,
-	mem::{frame::FrameAllocator, page::Page, KERNEL_BASE},
+	mem::{frame::FrameAllocator, page::Page, KERNEL_BASE, PAGE_SIZE},
 };
 
 static NEXT_PID: AtomicU64 = AtomicU64::new(0);
@@ -37,16 +37,17 @@ pub struct Task {
 impl Task {
 	const STACK_SIZE: usize = 0x1000;
 	const STACK_ALIGN: usize = 0x1000;
+	const START_ADDR: usize = 0x400000;
 
 	pub fn new(name: &'static str, entry: fn()) -> Self {
-		let rbp = kmalloc(Self::STACK_SIZE, Self::STACK_ALIGN);
-		let rsp = rbp + Self::STACK_SIZE;
+		let rbp = Self::START_ADDR + PAGE_SIZE - Self::STACK_SIZE;
+		let rsp = Self::START_ADDR + PAGE_SIZE;
 
 		let frame = FrameAllocator::alloc();
 		let page = Page::new(frame, true, true, true);
 
 		// Start at 4MB for no particular reason.
-		let (pml4_i, pdp_i, pd_i) = PageTable::index(0x400000);
+		let (pml4_i, pdp_i, pd_i) = PageTable::index(Self::START_ADDR);
 
 		// Copy the existing PML4 table, which maps the kernel already.
 		let mut pml4 = unsafe {
@@ -96,7 +97,7 @@ impl Task {
 			name,
 			rbp,
 			rsp,
-			rip: entry as usize,
+			rip: Self::START_ADDR,
 			cr3: cr3 - KERNEL_BASE, // to physical
 		}
 	}
