@@ -44,6 +44,7 @@ pub struct MultibootInfo {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct MultibootModuleEntry {
 	pub start: u32,
 	pub end: u32,

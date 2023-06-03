@@ -2,7 +2,7 @@ KERNEL_VMA equ 0xFFFFFFFF80000000
 
 extern _kernel_start
 extern _kernel_end
-extern handle_syscall
+extern _syscall_enter
 
 BITS 32
 
@@ -40,6 +40,7 @@ enable_paging:
 
 	mov eax, cr4                   ; Set PAE flag
 	or eax, 1 << 5
+	or eax, 1 << 16
 	mov cr4, eax
 
 	mov ecx, 0xC0000080            ; Set long mode & system call extensions.
@@ -90,7 +91,7 @@ init_syscalls:
 
 	mov ecx, 0xC0000082            ; Set LSTAR
 	rdmsr
-	mov rax, handle_syscall
+	mov rax, _syscall_enter
 	mov rdx, rax
 	shr rdx, 32
 	wrmsr
@@ -124,7 +125,6 @@ boot_pml4:
 	dq boot_pdp + 0x3 - KERNEL_VMA
 	times 510 dq 0
 	dq boot_pdp + 0x3 - KERNEL_VMA
-;	dq boot_pml4 + 0x3 - KERNEL_VMA
 
 gdt64:
 .kernel:              ; 0

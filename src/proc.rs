@@ -1,12 +1,12 @@
 use alloc::{
-	alloc::{alloc, alloc_zeroed, Global},
+	alloc::{alloc_zeroed, Global},
 	borrow::ToOwned,
 	boxed::Box,
 	vec,
 	vec::Vec,
 };
 use core::{
-	alloc::{Allocator, GlobalAlloc, Layout},
+	alloc::Layout,
 	arch::asm,
 	sync::atomic::{AtomicU64, Ordering},
 };
@@ -14,15 +14,23 @@ use core::{
 use log::{debug, warn};
 
 use crate::{
-	arch::amd64::{
-		idt::Interrupt,
-		vmem::{PageTable, BOOT_PML4_TABLE},
-	},
-	kalloc::kmalloc,
+	arch::amd64::vmem::{PageTable, BOOT_PML4_TABLE},
 	mem::{frame::FrameAllocator, page::Page, KERNEL_BASE, PAGE_SIZE},
 };
 
 static NEXT_PID: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Default)]
+pub struct CPU {
+	pub rsp0: usize,
+	pub rsp3: usize,
+}
+
+impl CPU {
+	pub fn store(&mut self) {
+		unsafe { asm!("wrgsbase {}", in(reg) self as *mut Self) };
+	}
+}
 
 #[derive(Debug)]
 pub struct Task {
@@ -39,7 +47,7 @@ impl Task {
 	const STACK_ALIGN: usize = 0x1000;
 	const START_ADDR: usize = 0x400000;
 
-	pub fn new(name: &'static str, entry: fn()) -> Self {
+	pub fn new(name: &'static str) -> Self {
 		let rbp = Self::START_ADDR + PAGE_SIZE - Self::STACK_SIZE;
 		let rsp = Self::START_ADDR + PAGE_SIZE;
 

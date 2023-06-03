@@ -16,3 +16,9 @@ macro_rules! kdbg {
 		($($crate::kdbg!($val)),+,)
 	};
 }
+
+macro_rules! breakpoint {
+	() => {
+		unsafe { ::core::arch::asm!("int 3") }
+	};
+}

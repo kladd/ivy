@@ -20,35 +20,24 @@ mod multiboot;
 mod proc;
 mod sync;
 
-use alloc::vec;
 use core::{arch::asm, panic::PanicInfo, ptr, sync::atomic::Ordering};
 
 use log::{debug, error, info};
 
 use crate::{
 	arch::amd64::{
-		cli,
-		clock::init_clock,
-		hlt,
-		idt::init_idt,
-		pic::init_pic,
-		sti,
-		vmem::{PageTable, BOOT_PML4_TABLE},
+		cli, clock::init_clock, hlt, idt::init_idt, pic::init_pic, sti,
+		vmem::PageTable,
 	},
 	devices::{serial::init_serial, video::Video},
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
-	mem::{frame::FrameAllocator, page::Page, KERNEL_BASE},
+	mem::{frame::FrameAllocator, page::Page, PhysicalAddress, KERNEL_BASE},
 	multiboot::{MultibootInfo, MultibootModuleEntry},
-	proc::Task,
+	proc::{Task, CPU},
 };
 
 static LOGGER: KernelLogger = KernelLogger;
-
-const USER_PROGRAM: &[u8] = &[
-	0x50, 0x49, 0xb8, 0xef, 0xbe, 0xad, 0xde, 0x00, 0x00, 0x00, 0x00, 0x0f,
-	0x05, 0x58, 0xc3, 0x90,
-];
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -77,42 +66,38 @@ pub extern "C" fn kernel_start(
 	init_idt();
 	init_pic();
 	init_clock();
-
 	sti();
+
+	// Load user program from initrd since we don't have a filesystem yet.
+	let initrd_mod: &MultibootModuleEntry = unsafe {
+		&*(PhysicalAddress(multiboot_info.mods_addr as usize).to_virtual())
+	};
+	kdbg!(initrd_mod);
 
 	// let mut screen = Video::new(0x800000);
 	// screen.test();
 	info!("kernel_end: 0x{:016X}", _kernel_end as usize);
 
-	let task = Task::new("gp_fault", say_hello);
+	// panic!();
+	let mut cpu = CPU::default();
+	cpu.store();
+
+	// First user process.
+	let task = Task::new("gp_fault");
 	// Switch to task page directory.
 	unsafe { asm!("mov cr3, {}", in(reg) task.cr3) };
-	// load task code.
+	// Load task code into 4MB (arbitrarily chosen entry point).
 	unsafe {
 		ptr::copy_nonoverlapping(
-			USER_PROGRAM.as_ptr(),
+			PhysicalAddress(initrd_mod.start as usize).to_virtual(),
 			0x400000 as *mut u8,
-			USER_PROGRAM.len(),
+			(initrd_mod.end - initrd_mod.start) as usize,
 		);
 	}
-	// sysret to user program.
+	// SYSRET to user program.
 	unsafe {
-		asm!(
-			r#"
-	cli
-	mov rsp, r11
-	mov r11, 0x202
-	sysretq
-	"#, in("r11") task.rsp, in("rcx") task.rip
-		)
-	}
-	// TODO: Why the hell does this stack need to be so large?
-	// also TODO: task.rsp should be allocated in not kernel memory.
-	// also TODO: r11 above (rflags) should enable interrupts, but returning
-	//            from handlers is busted.
-
-	loop {
-		hlt()
+		cpu.rsp3 = task.rsp;
+		asm!("jmp _syscall_ret", in("rcx") task.rip, options(nostack, noreturn))
 	}
 }
 
@@ -162,16 +147,8 @@ fn dump_pt(pt: *mut PageTable, level: PageTableLevel) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn handle_syscall() {
+pub unsafe extern "C" fn syscall_enter() {
 	asm!("mov r12, 0xdecafbad");
-	sti();
-	hlt();
-}
-
-// Assembled as USER_PROGRAM, this does nothing but document what that array
-// means.
-fn say_hello() {
-	unsafe { asm!("mov r8, 0xdeadbeef; syscall") };
 }
 
 extern "C" {
