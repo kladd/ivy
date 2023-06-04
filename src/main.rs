@@ -30,11 +30,16 @@ use crate::{
 		cli, clock::init_clock, hlt, idt::init_idt, pic::init_pic, sti,
 		vmem::PageTable,
 	},
-	devices::{serial::init_serial, video::Video},
+	devices::{
+		keyboard::{init_keyboard, KBD},
+		serial::init_serial,
+		video::Video,
+		video_terminal::VideoTerminal,
+	},
 	font::PSF2Font,
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
-	mem::{frame::FrameAllocator, page::Page, PhysicalAddress, KERNEL_BASE},
+	mem::{frame::FrameAllocator, PhysicalAddress, KERNEL_BASE},
 	multiboot::{MultibootInfo, MultibootModuleEntry},
 	proc::{Task, CPU},
 };
@@ -68,6 +73,7 @@ pub extern "C" fn kernel_start(
 	init_idt();
 	init_pic();
 	init_clock();
+	init_keyboard();
 	sti();
 
 	// Load user program from initrd since we don't have a filesystem yet.
@@ -82,11 +88,14 @@ pub extern "C" fn kernel_start(
 		unsafe { &*PhysicalAddress(mods[1].start as usize).to_virtual() };
 	font.debug('&');
 
-	let mut screen = Video::new(PhysicalAddress(0x800000).to_virtual(), font);
-	screen.test();
-	info!("kernel_end: 0x{:016X}", _kernel_end as usize);
+	let screen = Video::new(PhysicalAddress(0x800000).to_virtual(), font);
+	let mut video_term = unsafe { VideoTerminal::new(screen, &mut KBD) };
 
-	// panic!();
+	video_term.clear();
+	loop {
+		debug!("{}", video_term.read_line());
+	}
+
 	let mut cpu = CPU::default();
 	cpu.store();
 

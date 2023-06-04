@@ -1,7 +1,5 @@
 use core::slice;
 
-use log::debug;
-
 use crate::font::PSF2Font;
 
 pub struct Video<'font>(&'static mut [u32], &'font PSF2Font);
@@ -38,7 +36,20 @@ impl<'font> Video<'font> {
 		}
 	}
 
-	fn glyph(&mut self, c: char, x: usize, y: usize) {
+	pub fn blank(&mut self, x: usize, y: usize) {
+		let glyph_height = self.1.header.height as usize;
+		let glyph_width = self.1.header.width as usize;
+
+		for row in 0..glyph_height {
+			for col in 0..glyph_width {
+				let pos = (row + y * glyph_height) * Self::WIDTH
+					+ col + (x * glyph_width);
+				self.0[pos] = Self::BG.into();
+			}
+		}
+	}
+
+	pub fn glyph(&mut self, c: char, x: usize, y: usize) {
 		let glyph = &self.1.data[c as usize];
 		let glyph_height = self.1.header.height as usize;
 		let glyph_width = self.1.header.width as usize;
@@ -52,11 +63,13 @@ impl<'font> Video<'font> {
 					glyph[row * bytes_per_row + (col / u8::BITS as usize)];
 				let glyph_offset = (15 - col) % 8;
 
-				if (byte >> glyph_offset) & 1 != 0 {
-					let pos = (row + y * glyph_height) * Self::WIDTH
-						+ col + (x * glyph_width);
+				let pos = (row + y * glyph_height) * Self::WIDTH
+					+ col + (x * glyph_width);
 
+				if (byte >> glyph_offset) & 1 != 0 {
 					self.0[pos] = Self::FG.into();
+				} else {
+					self.0[pos] = Self::BG.into();
 				}
 			}
 		}
