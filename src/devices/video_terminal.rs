@@ -42,12 +42,18 @@ impl<'a> VideoTerminal<'a> {
 		}
 	}
 
+	pub fn test(&mut self) {
+		self.clear();
+		self.screen.test();
+	}
+
 	pub fn read_line(&mut self) -> String {
 		let mut s = String::with_capacity(Self::MAX_LINE_LEN);
 		loop {
 			match self.kbd.getc() {
 				Some(Keycode::Newline) => {
 					self.putc(Keycode::Newline);
+					self.blit();
 					break;
 				}
 				Some(Keycode::Char(c)) => {
@@ -62,12 +68,12 @@ impl<'a> VideoTerminal<'a> {
 				Some(Keycode::FormFeed) => self.putc(Keycode::FormFeed),
 				Some(Keycode::VerticalTab) => self.putc(Keycode::VerticalTab),
 				Some(Keycode::Nak) => {
-					while s.pop().is_some() {
-						self.putc(Keycode::Backspace)
-					}
+					s.clear();
+					self.putc(Keycode::Nak);
 				}
 				_ => continue,
 			}
+			self.blit();
 			hlt();
 		}
 		s
@@ -151,9 +157,6 @@ impl<'a> WriteCharacter for VideoTerminal<'a> {
 			_ => {}
 		}
 		self.update_cursor();
-		// TODO: Don't have to redraw the whole screen after every character
-		//       I/O, but it's fast enough for now.
-		self.blit();
 	}
 }
 
@@ -162,8 +165,16 @@ impl<'a> ReadCharacter for VideoTerminal<'a> {
 		self.kbd.getc()
 	}
 }
-// impl<'a> Write for VideoTerminal<'a> {
-// 	fn write_str(&mut self, s: &str) -> core::fmt::Result {
-// 		self.screen.write_str(s)
-// 	}
-// }
+
+impl<'a> Write for VideoTerminal<'a> {
+	fn write_str(&mut self, s: &str) -> core::fmt::Result {
+		for c in s.chars() {
+			match c {
+				'\n' => self.putc(Keycode::Newline),
+				_ => self.putc(Keycode::Char(c)),
+			}
+		}
+		self.blit();
+		Ok(())
+	}
+}

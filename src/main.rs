@@ -21,7 +21,7 @@ mod multiboot;
 mod proc;
 mod sync;
 
-use core::{arch::asm, panic::PanicInfo, ptr, slice};
+use core::{arch::asm, fmt::Write, panic::PanicInfo, ptr, slice};
 
 use log::{debug, error, info};
 
@@ -93,7 +93,11 @@ pub extern "C" fn kernel_start(
 
 	video_term.clear();
 	loop {
-		debug!("{}", video_term.read_line());
+		match video_term.read_line().as_str() {
+			"test" => video_term.test(),
+			"echo" => video_term.write_str("this is an echo\n").unwrap(),
+			_ => {}
+		}
 	}
 
 	let mut cpu = CPU::default();
