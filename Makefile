@@ -13,6 +13,7 @@ exe := "$(shell cat /proc/version | grep -q microsoft && echo ".exe")"
 kernel := $(tgt)/x86_64-unknown-lucy/debug/lucy
 boot_lib := $(tgt)/libboot.a
 initrd := $(tgt)/lucy.initrd
+disk_size := 1g
 
 all: $(rom)
 $(tgt):
@@ -46,9 +47,21 @@ $(rom): boot/grub.cfg $(kernel) $(initrd)
 	gunzip -c /usr/share/kbd/consolefonts/sun12x22.psfu.gz > $(tgt)/rom/boot/font.psfu
 	grub-mkrescue -o $(rom) $(tgt)/rom
 
-run: $(rom)
+$(tgt)/_disk_image: base
+	qemu-img$(exe) create -f raw $@ $(disk_size)
+	mkfs.ext2 $@
+	mkdir -p $(tgt)/mnt
+	sudo mount $@ $(tgt)/mnt
+	sudo cp -r base/* $(tgt)/mnt
+	sudo umount $(tgt)/mnt
+
+run: $(rom) $(tgt)/_disk_image
 	qemu-system-x86_64$(exe) -cdrom $(rom) \
-		-cpu qemu64,+fsgsbase \
+		--enable-kvm \
+		-cpu host \
+		-machine q35 \
+		-drive file=$(tgt)/_disk_image,if=none,id=nvm \
+		-device nvme,serial=decafbad,drive=nvm \
 		-d int \
 		-m 2g \
 		-no-reboot \

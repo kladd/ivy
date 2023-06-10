@@ -62,7 +62,6 @@ pub fn kernel_map(pml4: &mut PML4, start: PhysicalAddress, pages: usize) {
 			pd.index(start.to_virtual_addr() + (i * PAGE_SIZE)),
 			Page::new(start.offset(i * PAGE_SIZE), 0x83),
 		);
-		debug!("MAPPPINGNGNGNGN {virt:016X}");
 		unsafe { asm!("invlpg [{}]", in(reg) virt) };
 	}
 }
