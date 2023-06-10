@@ -1,4 +1,4 @@
-KERNEL_VMA equ 0xFFFFFFFF80000000
+KERNEL_VMA equ 0xFFFFFF8000000000
 
 extern _kernel_start
 extern _kernel_end
@@ -9,7 +9,7 @@ BITS 32
 section .multiboot
 multiboot_start:
 	dd 0x1BADB002                  ; MULTIBOOT_MAGIC
-	dd 7                           ; ALIGN | MEMINFO
+	dd 7                           ; ALIGN | MEMINFO | VIDEO
 	dd -(7+0x1BADB002)             ; CHECKSUM
 	dd 0,0,0,0,0
 	dd 0                           ; Linear buffer
@@ -21,7 +21,7 @@ multiboot_end:
 section .bss
 kernel_stack_bottom:
 	align 0x1000
-	resb  0x4000
+	resb  0x10000
 kernel_stack_top:
 
 global _start
@@ -69,9 +69,7 @@ start_long_mode_high:
 	add rsi, rax                   ; adjust the multiboot header to high
 	                               ; mem also
 	mov rax, qword boot_pml4
-	mov rdx, qword boot_pdp
 	mov qword [rax], 0             ; unmap low memory
-	mov qword [rdx], 0             ;
 	invlpg [0]                     ;
 	mov rax, qword gdt64.ptr_high
 	lgdt [rax]          ; load a GDT in high space
@@ -114,14 +112,10 @@ boot_pd:
 	dq 0x200083
 	dq 0x400083
 	dq 0x600083
-	dq 0xFD000083
-	dq 0xFD200083
-	times 506 dq 0
+	times 508 dq 0
 boot_pdp:
 	dq boot_pd + 0x3 - KERNEL_VMA
-	times 509 dq 0
-	dq boot_pd + 0x3 - KERNEL_VMA
-	dq 0
+	times 511 dq 0
 global boot_pml4
 boot_pml4:
 	dq boot_pdp + 0x3 - KERNEL_VMA

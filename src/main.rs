@@ -3,6 +3,8 @@
 #![feature(abi_x86_interrupt)]
 #![feature(allocator_api)]
 #![feature(naked_functions)]
+#![feature(core_intrinsics)]
+#![feature(pointer_byte_offsets)]
 // TODO: Un-suppress these warnings.
 #![allow(dead_code)]
 #![allow(unused_variables)]
@@ -12,8 +14,10 @@ extern crate alloc;
 mod arch;
 #[macro_use]
 mod debug;
+mod acpi;
 mod devices;
 mod font;
+mod fs;
 mod kalloc;
 mod logger;
 mod mem;
@@ -21,14 +25,22 @@ mod multiboot;
 mod proc;
 mod sync;
 
-use core::{arch::asm, fmt::Write, panic::PanicInfo, ptr, slice};
+use core::{
+	arch::asm, cmp::min, fmt::Write, mem::size_of, panic::PanicInfo, ptr, slice,
+};
 
 use log::{debug, error, info};
 
 use crate::{
+	acpi::find_rsdp,
 	arch::amd64::{
-		cli, clock::init_clock, hlt, idt::init_idt, pic::init_pic, sti,
-		vmem::PageTable,
+		cli,
+		clock::init_clock,
+		hlt,
+		idt::init_idt,
+		pic::init_pic,
+		sti,
+		vmem::{PageTable, BOOT_PML4_TABLE, PML4},
 	},
 	devices::{
 		keyboard::{init_keyboard, KBD},
@@ -39,8 +51,8 @@ use crate::{
 	font::PSF2Font,
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
-	mem::{frame::FrameAllocator, PhysicalAddress, KERNEL_BASE},
-	multiboot::{MultibootInfo, MultibootModuleEntry},
+	mem::{frame::FrameAllocator, kernel_map, PhysicalAddress, KERNEL_BASE},
+	multiboot::{MultibootInfo, MultibootMmapEntry, MultibootModuleEntry},
 	proc::{Task, CPU},
 };
 
@@ -66,15 +78,57 @@ pub extern "C" fn kernel_start(
 
 	debug!("{:#08X?}", multiboot_magic);
 	kdbg!(multiboot_info);
+	let rsdp = unsafe { &*find_rsdp() };
 
-	FrameAllocator::init(0x40000000, 0x200000 * 40);
+	FrameAllocator::init(0x600000, 0x200000 * 512);
 	KernelAllocator::init(_kernel_end as usize, 0x200000);
+
+	debug!("kernel end {:016X}", _kernel_end as usize - KERNEL_BASE);
 
 	init_idt();
 	init_pic();
+	debug!("rsdt: 0x{:016X}", rsdp.rsdt_addr);
 	init_clock();
 	init_keyboard();
-	sti();
+
+	// Adopt boot page tables.
+	let pml4 = unsafe { PML4::adopt_boot_table() };
+
+	let mmap_base: *const MultibootMmapEntry =
+		PhysicalAddress(multiboot_info.mmap_addr as usize).to_virtual();
+	let mmap_len =
+		multiboot_info.mmap_length as usize / size_of::<MultibootMmapEntry>();
+	let mut i = 0;
+	loop {
+		let region: MultibootMmapEntry =
+			unsafe { ptr::read_unaligned(mmap_base.byte_offset(i)) };
+		debug!("mmap[{i}] => {:#X?}, pages = {}", region, region.pages());
+		i += region.size as isize + size_of::<u32>() as isize;
+		if region.kind == 2 {
+			kernel_map(
+				pml4,
+				PhysicalAddress(region.addr as usize),
+				min(2, region.pages()),
+			);
+		}
+		if i >= multiboot_info.mmap_length as isize {
+			break;
+		}
+	}
+	rsdp.rsdt();
+
+	// I feel like this should be in the memory map, but it isn't. Map the
+	// framebuffer.
+	kernel_map(
+		pml4,
+		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
+		2,
+	);
+
+	dump_pt(BOOT_PML4_TABLE, PageTableLevel::PML4);
+	breakpoint!();
+
+	// sti();
 
 	// Load user program from initrd since we don't have a filesystem yet.
 	let mods: &[MultibootModuleEntry] = unsafe {
@@ -88,7 +142,10 @@ pub extern "C" fn kernel_start(
 		unsafe { &*PhysicalAddress(mods[1].start as usize).to_virtual() };
 	font.debug('&');
 
-	let screen = Video::new(PhysicalAddress(0x800000).to_virtual(), font);
+	let screen = Video::new(
+		PhysicalAddress(multiboot_info.framebuffer_addr as usize).to_virtual(),
+		font,
+	);
 	let mut video_term = unsafe { VideoTerminal::new(screen, &mut KBD) };
 
 	video_term.clear();

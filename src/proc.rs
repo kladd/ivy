@@ -52,7 +52,7 @@ impl Task {
 		let rsp = Self::START_ADDR + PAGE_SIZE;
 
 		let frame = FrameAllocator::alloc();
-		let page = Page::new(frame, true, true, true);
+		let page = Page::new(frame, 0x7);
 
 		// Start at 4MB for no particular reason.
 		let (pml4_i, pdp_i, pd_i) = PageTable::index(Self::START_ADDR);

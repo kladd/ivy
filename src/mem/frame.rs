@@ -3,7 +3,6 @@ use core::cell::OnceCell;
 use log::{debug, info, trace};
 
 use crate::{
-	arch::amd64::vmem::PageTable,
 	mem::{PhysicalAddress, PAGE_SIZE},
 	sync::SpinLock,
 };

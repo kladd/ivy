@@ -4,9 +4,12 @@ use core::{
 	mem::size_of,
 };
 
-use log::debug;
+use log::{debug, warn};
 
-use crate::kdbg;
+use crate::{
+	arch::amd64::{cli, hlt},
+	kdbg,
+};
 
 const MAX_INTERRUPTS: usize = 256;
 
@@ -69,7 +72,7 @@ pub fn init_idt() {
 		debug!("{:016X?}", print_irq as usize);
 		register_handler(1, print_irq);
 		register_handler(2, print_irq);
-		register_handler(3, print_irq);
+		register_handler(3, breakpoint);
 		register_handler(4, print_irq);
 		register_handler(5, print_irq);
 		register_handler(6, invalid_opcode);
@@ -113,6 +116,12 @@ extern "x86-interrupt" fn page_fault(interrupt: Interrupt, error: usize) {
 		"#PF({:016X}, error: {error:016X}): {interrupt:#?}",
 		interrupt.rip
 	);
+}
+
+extern "x86-interrupt" fn breakpoint(interrupt: Interrupt) {
+	warn!("#BP({:016X}): {interrupt:#?}", interrupt.rip);
+	cli();
+	hlt();
 }
 
 extern "x86-interrupt" fn print_irq_code(interrupt: Interrupt, error: usize) {

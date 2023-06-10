@@ -48,8 +48,8 @@ $(rom): boot/grub.cfg $(kernel) $(initrd)
 
 run: $(rom)
 	qemu-system-x86_64$(exe) -cdrom $(rom) \
-		--enable-kvm \
-		-cpu host \
+		-cpu qemu64,+fsgsbase \
+		-d int \
 		-m 2g \
 		-no-reboot \
 		-no-shutdown \

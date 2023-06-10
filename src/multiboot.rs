@@ -1,3 +1,5 @@
+use crate::mem::PAGE_SIZE;
+
 const MEM_INFO_FLAG: u32 = 0x1;
 
 #[derive(Debug)]
@@ -50,4 +52,19 @@ pub struct MultibootModuleEntry {
 	pub end: u32,
 	pub string: u32,
 	reserved: u32,
+}
+
+#[repr(packed)]
+#[derive(Debug)]
+pub struct MultibootMmapEntry {
+	pub size: u32,
+	pub addr: u64,
+	pub len: u64,
+	pub kind: u32,
+}
+
+impl MultibootMmapEntry {
+	pub fn pages(&self) -> usize {
+		(self.len as usize + PAGE_SIZE - 1) / PAGE_SIZE
+	}
 }
