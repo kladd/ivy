@@ -115,7 +115,6 @@ pub extern "C" fn kernel_start(
 			break;
 		}
 	}
-	rsdp.rsdt();
 
 	// I feel like this should be in the memory map, but it isn't. Map the
 	// framebuffer.
@@ -126,6 +125,7 @@ pub extern "C" fn kernel_start(
 	);
 
 	dump_pt(BOOT_PML4_TABLE, PageTableLevel::PML4);
+	kdbg!(rsdp.rsdt()).test();
 	breakpoint!();
 
 	// sti();
