@@ -22,3 +22,39 @@ _syscall_ret:
 	mov r11, 0x202
 	swapgs
 	o64 sysret
+
+	;;
+	;; TODO: this doesn't belong here.
+	;;
+
+	global outsl_asm
+	;; (rdi: len, rsi: src, rdx: port)
+outsl_asm:
+	push rbp
+	mov rbp, rsp
+
+	push rcx
+	mov rcx, rdi
+
+	rep outsd
+
+	pop rcx
+
+	pop rbp
+	ret
+
+	global insl_asm
+	;; (rdi: dst, rsi: len, rdx: port)
+insl_asm:
+	push rbp
+	mov rbp, rsp
+
+	push rcx
+	mov rcx, rsi
+
+	rep insd
+
+	pop rcx
+
+	pop rbp
+	ret

@@ -7,7 +7,7 @@ use core::{
 use log::{debug, warn};
 
 use crate::{
-	arch::amd64::{cli, hlt},
+	arch::amd64::{cli, hlt, outb},
 	kdbg,
 };
 
@@ -64,6 +64,15 @@ impl InterruptEntry {
 			_rsvd: 0,
 			flags,
 		}
+	}
+}
+
+impl Interrupt {
+	pub fn eoi(isr: usize) {
+		if isr > 40 {
+			outb(0xA0, 0x20);
+		}
+		outb(0x20, 0x20);
 	}
 }
 
