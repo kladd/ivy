@@ -16,7 +16,7 @@ pub struct SpinLockGuard<'lock, T> {
 
 impl<T> SpinLock<T> {
 	const LOCKED: bool = true;
-	const UNLOCKED: bool = true;
+	const UNLOCKED: bool = false;
 
 	pub const fn new(value: T) -> Self {
 		Self {
