@@ -55,13 +55,11 @@ $(tgt)/_disk_image: base
 	sudo cp -r base/* $(tgt)/mnt
 	sudo umount $(tgt)/mnt
 
-run: $(rom) $(tgt)/_disk_image
+run: $(rom)
 	qemu-system-x86_64$(exe) -cdrom $(rom) \
 		--enable-kvm \
 		-cpu host \
 		-machine q35 \
-		-drive file=$(tgt)/_disk_image,if=none,id=nvm \
-		-device nvme,serial=decafbad,drive=nvm \
 		-d int \
 		-m 2g \
 		-no-reboot \

@@ -1,24 +1,28 @@
-use core::{
-	fmt::Write,
-	sync::atomic::{AtomicBool, Ordering},
-};
+use core::fmt::Write;
 
 use log::warn;
 
 use crate::{
 	arch::amd64::{inb, outb},
 	devices::character::{Keycode, ReadCharacter, WriteCharacter},
-	sync::{InitOnce, SpinLock, SpinLockGuard},
+	sync::{InitOnce, SpinLock},
 };
 
 #[derive(Debug)]
 pub struct SerialPort(u16);
-pub static mut COM1: SerialPort = SerialPort(0x3F8);
 
-static INITIALIZED: AtomicBool = AtomicBool::new(false);
+static COM1: InitOnce<SpinLock<SerialPort>> = InitOnce::new();
+
+pub fn com1<'a>() -> &'a SpinLock<SerialPort> {
+	COM1.get_or_init(|| {
+		let serial = SerialPort(0x3F8);
+		serial.init();
+		SpinLock::new(serial)
+	})
+}
 
 pub fn init_serial() {
-	unsafe { COM1.init() }
+	com1();
 }
 
 impl ReadCharacter for SerialPort {
@@ -50,11 +54,7 @@ impl WriteCharacter for SerialPort {
 }
 
 impl SerialPort {
-	pub fn init(&self) {
-		if INITIALIZED.load(Ordering::Acquire) {
-			return;
-		}
-
+	fn init(&self) {
 		outb(self.0 + 1, 0x00);
 		outb(self.0 + 3, 0x80);
 		outb(self.0 + 0, 0x02);
@@ -62,28 +62,26 @@ impl SerialPort {
 		outb(self.0 + 3, 0x03);
 		outb(self.0 + 2, 0xC7);
 		outb(self.0 + 4, 0x0B);
-
-		INITIALIZED.store(true, Ordering::Release);
 	}
 
 	pub fn read_byte(&self) -> u8 {
-		await_recv();
+		self.await_recv();
 		inb(self.0)
 	}
 
 	fn write_byte(&self, b: u8) -> core::fmt::Result {
-		await_transmit();
+		self.await_transmit();
 		outb(self.0, b);
 		Ok(())
 	}
-}
 
-fn await_recv() {
-	while inb(0x3f8 + 5) & 0x01 == 0 {}
-}
+	fn await_recv(&self) {
+		while inb(self.0 + 5) & 0x01 == 0 {}
+	}
 
-fn await_transmit() {
-	while inb(0x3f8 + 5) & 0x20 == 0 {}
+	fn await_transmit(&self) {
+		while inb(self.0 + 5) & 0x20 == 0 {}
+	}
 }
 
 impl Write for SerialPort {

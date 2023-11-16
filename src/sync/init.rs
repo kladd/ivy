@@ -23,7 +23,7 @@ impl<T: Sync> InitOnce<T> {
 		if self
 			.done
 			.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-			.unwrap()
+			.is_ok()
 		{
 			unsafe { *self.data.get() = Some(f()) };
 		}

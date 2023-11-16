@@ -18,19 +18,17 @@ impl log::Log for KernelLogger {
 
 	fn log(&self, record: &Record) {
 		if self.enabled(record.metadata()) {
-			unsafe {
-				writeln!(
-					serial::COM1,
-					"{}{:>5}{} [{}:{}]: {}",
-					Self::start_color(record.metadata()),
-					record.level(),
-					COLOR_DEFAULT,
-					record.file().unwrap(),
-					record.line().unwrap(),
-					record.args()
-				)
-				.unwrap()
-			};
+			writeln!(
+				serial::com1().lock(),
+				"{}{:>5}{} [{}:{}]: {}",
+				Self::start_color(record.metadata()),
+				record.level(),
+				COLOR_DEFAULT,
+				record.file().unwrap(),
+				record.line().unwrap(),
+				record.args()
+			)
+			.unwrap();
 		}
 	}
 
