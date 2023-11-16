@@ -26,7 +26,7 @@ impl<T> SpinLock<T> {
 	}
 
 	pub fn lock(&self) -> SpinLockGuard<T> {
-		while !self
+		while self
 			.locked
 			.compare_exchange(
 				Self::UNLOCKED,
@@ -34,7 +34,7 @@ impl<T> SpinLock<T> {
 				Ordering::Acquire,
 				Ordering::Relaxed,
 			)
-			.unwrap()
+			.is_err()
 		{
 			while !self
 				.locked
@@ -44,7 +44,7 @@ impl<T> SpinLock<T> {
 					Ordering::Relaxed,
 					Ordering::Relaxed,
 				)
-				.unwrap()
+				.is_err()
 			{}
 		}
 

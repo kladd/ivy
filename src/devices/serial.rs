@@ -8,6 +8,7 @@ use log::warn;
 use crate::{
 	arch::amd64::{inb, outb},
 	devices::character::{Keycode, ReadCharacter, WriteCharacter},
+	sync::{InitOnce, SpinLock, SpinLockGuard},
 };
 
 #[derive(Debug)]

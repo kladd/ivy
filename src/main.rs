@@ -39,7 +39,6 @@ use crate::{
 		hlt,
 		idt::init_idt,
 		pic::init_pic,
-		sti,
 		vmem::{PageTable, BOOT_PML4_TABLE, PML4},
 	},
 	devices::{
