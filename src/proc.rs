@@ -47,11 +47,11 @@ impl Task {
 	const STACK_ALIGN: usize = 0x1000;
 	const START_ADDR: usize = 0x400000;
 
-	pub fn new(name: &'static str) -> Self {
+	pub fn new(falloc: &mut FrameAllocator, name: &'static str) -> Self {
 		let rbp = Self::START_ADDR + PAGE_SIZE - Self::STACK_SIZE;
 		let rsp = Self::START_ADDR + PAGE_SIZE;
 
-		let frame = FrameAllocator::alloc();
+		let frame = falloc.alloc();
 		let page = Page::new(frame, 0x7);
 
 		// Start at 4MB for no particular reason.

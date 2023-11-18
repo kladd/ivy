@@ -2,12 +2,7 @@ use core::arch::asm;
 
 use log::debug;
 
-use crate::{
-	arch::amd64::vmem::PML4,
-	dump_pt,
-	mem::page::Page,
-	PageTableLevel::{PD, PDP},
-};
+use crate::{arch::amd64::vmem::PML4, mem::page::Page};
 
 pub mod frame;
 pub mod page;

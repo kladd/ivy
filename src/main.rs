@@ -77,9 +77,10 @@ pub extern "C" fn kernel_start(
 
 	debug!("{:#08X?}", multiboot_magic);
 	kdbg!(multiboot_info);
+
 	let rsdp = unsafe { &*find_rsdp() };
 
-	FrameAllocator::init(0x600000, 0x200000 * 512);
+	let mut falloc = FrameAllocator::new(0x600000, 0x200000 * 512);
 	KernelAllocator::init(_kernel_end as usize, 0x200000);
 
 	debug!("kernel end {:016X}", _kernel_end as usize - KERNEL_BASE);
@@ -159,7 +160,7 @@ pub extern "C" fn kernel_start(
 	cpu.store();
 
 	// First user process.
-	let task = Task::new("gp_fault");
+	let task = Task::new(&mut falloc, "gp_fault");
 	// Switch to task page directory.
 	unsafe { asm!("mov cr3, {}", in(reg) task.cr3) };
 	// Load task code into 4MB (arbitrarily chosen entry point).
