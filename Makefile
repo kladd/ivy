@@ -49,11 +49,7 @@ $(rom): boot/grub.cfg $(kernel) $(initrd)
 
 $(tgt)/_disk_image: base
 	qemu-img$(exe) create -f raw $@ $(disk_size)
-	mkfs.ext2 $@
-	mkdir -p $(tgt)/mnt
-	sudo mount $@ $(tgt)/mnt
-	sudo cp -r base/* $(tgt)/mnt
-	sudo umount $(tgt)/mnt
+	mkfs.ext2 -d base $@
 
 run: $(rom)
 	qemu-system-x86_64$(exe) -cdrom $(rom) \
