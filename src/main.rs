@@ -90,8 +90,7 @@ pub extern "C" fn kernel_start(
 	init_clock();
 	init_keyboard();
 
-	// Adopt boot page tables.
-	let pml4 = unsafe { PML4::adopt_boot_table() };
+	let kernel_page_table = PML4::adopt_boot_table().unwrap();
 
 	let mmap_base: *const MultibootMmapEntry =
 		PhysicalAddress(multiboot_info.mmap_addr as usize).to_virtual();
@@ -105,7 +104,7 @@ pub extern "C" fn kernel_start(
 		i += region.size as isize + size_of::<u32>() as isize;
 		if region.kind == 2 {
 			kernel_map(
-				pml4,
+				kernel_page_table,
 				PhysicalAddress(region.addr as usize),
 				min(2, region.pages()),
 			);
@@ -118,7 +117,7 @@ pub extern "C" fn kernel_start(
 	// I feel like this should be in the memory map, but it isn't. Map the
 	// framebuffer.
 	kernel_map(
-		pml4,
+		kernel_page_table,
 		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
 		2,
 	);

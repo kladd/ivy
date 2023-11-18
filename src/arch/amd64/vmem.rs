@@ -11,7 +11,7 @@ use crate::mem::{page::Page, PhysicalAddress};
 pub struct PageTable(pub [usize; 512]);
 
 pub const BOOT_PML4_TABLE: *mut PageTable = boot_pml4 as *mut PageTable;
-pub const KERN_PML4_TABLE: *mut PML4 = boot_pml4 as *mut PML4;
+pub const KERN_PML4_TABLE: Option<*mut PML4> = Some(boot_pml4 as *mut PML4);
 pub const BOOT_PDP_TABLE: *mut PageTable = boot_pdp as *mut PageTable;
 pub const BOOT_PD_TABLE: *mut PageTable = boot_pd as *mut PageTable;
 
@@ -66,8 +66,8 @@ impl PML4 {
 		unsafe { alloc_zeroed(Layout::new::<Self>()) as *mut _ }
 	}
 
-	pub unsafe fn adopt_boot_table() -> &'static mut Self {
-		&mut *KERN_PML4_TABLE
+	pub fn adopt_boot_table() -> Option<&'static mut Self> {
+		KERN_PML4_TABLE.map(|s| unsafe { &mut *s }).take()
 	}
 }
 
