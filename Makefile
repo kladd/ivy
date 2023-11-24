@@ -51,11 +51,12 @@ $(tgt)/_disk_image: base
 	qemu-img$(exe) create -f raw $@ $(disk_size)
 	mkfs.ext2 -d base $@
 
-run: $(rom)
+run: $(rom) $(tgt)/_disk_image
 	qemu-system-x86_64$(exe) -cdrom $(rom) \
 		--enable-kvm \
 		-cpu host \
 		-machine q35 \
+		-drive file=$(tgt)/_disk_image,format=raw \
 		-d int \
 		-m 2g \
 		-no-reboot \

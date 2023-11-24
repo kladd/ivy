@@ -25,6 +25,7 @@ mod multiboot;
 mod proc;
 mod sync;
 
+use alloc::vec::Vec;
 use core::{
 	arch::asm, cmp::min, fmt::Write, mem::size_of, panic::PanicInfo, ptr, slice,
 };
@@ -39,18 +40,22 @@ use crate::{
 		hlt,
 		idt::init_idt,
 		pic::init_pic,
+		sti,
 		vmem::{PageTable, BOOT_PML4_TABLE, PML4},
 	},
 	devices::{
 		keyboard::{init_keyboard, KBD},
-		serial::init_serial,
+		serial,
 		video::Video,
 		video_terminal::VideoTerminal,
 	},
 	font::PSF2Font,
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
-	mem::{frame::FrameAllocator, kernel_map, PhysicalAddress, KERNEL_BASE},
+	mem::{
+		frame::FrameAllocator, kernel_map, PhysicalAddress, KERNEL_LMA,
+		KERNEL_VMA, PAGE_SIZE,
+	},
 	multiboot::{MultibootInfo, MultibootMmapEntry, MultibootModuleEntry},
 	proc::{Task, CPU},
 };
@@ -70,8 +75,7 @@ pub extern "C" fn kernel_start(
 	multiboot_magic: u32,
 	multiboot_info: &MultibootInfo,
 ) -> ! {
-	init_serial();
-
+	serial::init();
 	log::set_logger(&LOGGER).unwrap();
 	log::set_max_level(log::STATIC_MAX_LEVEL);
 
@@ -80,10 +84,9 @@ pub extern "C" fn kernel_start(
 
 	let rsdp = unsafe { &*find_rsdp() };
 
-	let mut falloc = FrameAllocator::new(0x600000, 0x200000 * 512);
 	KernelAllocator::init(_kernel_end as usize, 0x200000);
 
-	debug!("kernel end {:016X}", _kernel_end as usize - KERNEL_BASE);
+	debug!("kernel end {:016X}", _kernel_end as usize - KERNEL_VMA);
 
 	init_idt();
 	init_pic();
@@ -92,42 +95,18 @@ pub extern "C" fn kernel_start(
 	init_keyboard();
 
 	let kernel_page_table = PML4::adopt_boot_table().unwrap();
+	let memory_map = read_memory_map(multiboot_info);
+	identity_map_reserved(kernel_page_table, &memory_map);
+	map_framebuffer(kernel_page_table, multiboot_info);
 
-	let mmap_base: *const MultibootMmapEntry =
-		PhysicalAddress(multiboot_info.mmap_addr as usize).to_virtual();
-	let mmap_len =
-		multiboot_info.mmap_length as usize / size_of::<MultibootMmapEntry>();
-	let mut i = 0;
-	loop {
-		let region: MultibootMmapEntry =
-			unsafe { ptr::read_unaligned(mmap_base.byte_offset(i)) };
-		debug!("mmap[{i}] => {:#X?}, pages = {}", region, region.pages());
-		i += region.size as isize + size_of::<u32>() as isize;
-		if region.kind == 2 {
-			kernel_map(
-				kernel_page_table,
-				PhysicalAddress(region.addr as usize),
-				min(2, region.pages()),
-			);
-		}
-		if i >= multiboot_info.mmap_length as isize {
-			break;
-		}
-	}
-
-	// I feel like this should be in the memory map, but it isn't. Map the
-	// framebuffer.
-	kernel_map(
-		kernel_page_table,
-		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
-		2,
-	);
+	let mut frame_allocator = init_frame_allocator(&memory_map);
 
 	dump_pt(BOOT_PML4_TABLE, PageTableLevel::PML4);
 	kdbg!(rsdp.rsdt()).test();
+
 	breakpoint!();
 
-	// sti();
+	sti();
 
 	// Load user program from initrd since we don't have a filesystem yet.
 	let mods: &[MultibootModuleEntry] = unsafe {
@@ -160,7 +139,7 @@ pub extern "C" fn kernel_start(
 	cpu.store();
 
 	// First user process.
-	let task = Task::new(&mut falloc, "gp_fault");
+	let task = Task::new(&mut frame_allocator, "gp_fault");
 	// Switch to task page directory.
 	unsafe { asm!("mov cr3, {}", in(reg) task.cr3) };
 	// Load task code into 4MB (arbitrarily chosen entry point).
@@ -176,6 +155,88 @@ pub extern "C" fn kernel_start(
 		cpu.rsp3 = task.rsp;
 		asm!("jmp _syscall_ret", in("rcx") task.rip, options(nostack, noreturn))
 	}
+}
+
+fn read_memory_map(multiboot_info: &MultibootInfo) -> Vec<MultibootMmapEntry> {
+	let mut map = Vec::new();
+
+	let mmap_base: *const MultibootMmapEntry =
+		PhysicalAddress(multiboot_info.mmap_addr as usize).to_virtual();
+	let mmap_len =
+		multiboot_info.mmap_length as usize / size_of::<MultibootMmapEntry>();
+
+	let mut i = 0;
+	loop {
+		let region: MultibootMmapEntry =
+			unsafe { ptr::read_unaligned(mmap_base.byte_offset(i)) };
+		debug!("mmap[{i}] => {:#X?}, pages = {}", region, region.pages());
+		i += region.size as isize + size_of::<u32>() as isize;
+
+		map.push(region);
+
+		if i >= multiboot_info.mmap_length as isize {
+			break;
+		}
+	}
+
+	map
+}
+
+fn identity_map_reserved(
+	kernel_page_table: &mut PML4,
+	memory_map: &Vec<MultibootMmapEntry>,
+) {
+	for region in memory_map {
+		kernel_map(
+			kernel_page_table,
+			PhysicalAddress(region.addr as usize),
+			min(1, region.pages()),
+		);
+	}
+}
+
+fn map_framebuffer(
+	kernel_page_table: &mut PML4,
+	multiboot_info: &MultibootInfo,
+) {
+	kernel_map(
+		kernel_page_table,
+		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
+		(multiboot_info.framebuffer_bpp as usize / u8::BITS as usize
+			* multiboot_info.framebuffer_height as usize
+			* multiboot_info.framebuffer_width as usize)
+			.div_ceil(PAGE_SIZE),
+	);
+}
+
+fn init_frame_allocator(
+	memory_map: &Vec<MultibootMmapEntry>,
+) -> FrameAllocator {
+	let largest_range = memory_map
+		.iter()
+		// Kind 1 = Available.
+		.filter(|region| region.kind == 1)
+		.max_by(|region_a, region_b| {
+			// For alignment.
+			let a_len = region_a.len;
+			let b_len = region_b.len;
+			a_len.cmp(&b_len)
+		})
+		.expect("No available memory regions.");
+	// Alignment.
+	let largest_range_addr = largest_range.addr;
+	assert_eq!(
+		KERNEL_LMA, largest_range.addr as usize,
+		"Unexpected memory region: {}",
+		largest_range_addr
+	);
+	assert!(
+		largest_range.pages() > 512,
+		"Frame allocator region too small."
+	);
+
+	// TODO: Don't hardcode frame allocator region.
+	FrameAllocator::new(0x600000, 512 * PAGE_SIZE)
 }
 
 enum PageTableLevel {
@@ -199,11 +260,11 @@ impl PageTableLevel {
 	) -> Option<(*mut PageTable, PageTableLevel)> {
 		match self {
 			Self::PML4 => Some((
-				((entry & !0xFFusize) + KERNEL_BASE) as *mut PageTable,
+				((entry & !0xFFusize) + KERNEL_VMA) as *mut PageTable,
 				PageTableLevel::PDP,
 			)),
 			Self::PDP => Some((
-				((entry & !0xFFusize) + KERNEL_BASE) as *mut PageTable,
+				((entry & !0xFFusize) + KERNEL_VMA) as *mut PageTable,
 				PageTableLevel::PD,
 			)),
 			Self::PD => None,

@@ -15,13 +15,13 @@ static COM1: InitOnce<SpinLock<SerialPort>> = InitOnce::new();
 
 pub fn com1<'a>() -> &'a SpinLock<SerialPort> {
 	COM1.get_or_init(|| {
-		let serial = SerialPort(0x3F8);
+		let mut serial = SerialPort(0x3F8);
 		serial.init();
 		SpinLock::new(serial)
 	})
 }
 
-pub fn init_serial() {
+pub fn init() {
 	com1();
 }
 
@@ -54,7 +54,7 @@ impl WriteCharacter for SerialPort {
 }
 
 impl SerialPort {
-	fn init(&self) {
+	fn init(&mut self) {
 		outb(self.0 + 1, 0x00);
 		outb(self.0 + 3, 0x80);
 		outb(self.0 + 0, 0x02);

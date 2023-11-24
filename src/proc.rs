@@ -15,7 +15,7 @@ use log::{debug, warn};
 
 use crate::{
 	arch::amd64::vmem::{PageTable, BOOT_PML4_TABLE},
-	mem::{frame::FrameAllocator, page::Page, KERNEL_BASE, PAGE_SIZE},
+	mem::{frame::FrameAllocator, page::Page, KERNEL_VMA, PAGE_SIZE},
 };
 
 static NEXT_PID: AtomicU64 = AtomicU64::new(0);
@@ -84,14 +84,14 @@ impl Task {
 		}
 		// TODO: V2P. This is brittle. Also, you know, plan the virtual address.
 		// debug!("box leak 1");
-		pdp[pdp_i] = Box::leak(pd) as *mut _ as usize - KERNEL_BASE + 7;
+		pdp[pdp_i] = Box::leak(pd) as *mut _ as usize - KERNEL_VMA + 7;
 		for (i, ent) in pdp.0.iter().enumerate() {
 			if *ent != 0 {
 				warn!("[{i}] = {ent:016X}");
 			}
 		}
 		// debug!("box leak 2");
-		pml4[pml4_i] = Box::leak(pdp) as *mut _ as usize - KERNEL_BASE + 7;
+		pml4[pml4_i] = Box::leak(pdp) as *mut _ as usize - KERNEL_VMA + 7;
 		for (i, ent) in pml4.0.iter().enumerate() {
 			if *ent != 0 {
 				warn!("[{i}] = {ent:016X}");
@@ -106,7 +106,7 @@ impl Task {
 			rbp,
 			rsp,
 			rip: Self::START_ADDR,
-			cr3: cr3 - KERNEL_BASE, // to physical
+			cr3: cr3 - KERNEL_VMA, // to physical
 		}
 	}
 }

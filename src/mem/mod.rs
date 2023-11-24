@@ -7,6 +7,9 @@ use crate::{arch::amd64::vmem::PML4, mem::page::Page};
 pub mod frame;
 pub mod page;
 
+// TODO: Define once (already defined in linker and boot.asm).
+pub const KERNEL_VMA: usize = 0xFFFFFF8000000000;
+pub const KERNEL_LMA: usize = 0x0000000000100000;
 pub const PAGE_SIZE: usize = 0x200000;
 
 #[derive(Debug)]
@@ -21,7 +24,7 @@ impl PhysicalAddress {
 	}
 
 	pub fn to_virtual_addr(&self) -> usize {
-		self.0 | KERNEL_BASE
+		self.0 | KERNEL_VMA
 	}
 
 	pub fn offset(&self, size: usize) -> PhysicalAddress {
@@ -31,15 +34,13 @@ impl PhysicalAddress {
 
 impl<T> From<*mut T> for PhysicalAddress {
 	fn from(value: *mut T) -> Self {
-		PhysicalAddress(value as usize - KERNEL_BASE)
+		PhysicalAddress(value as usize - KERNEL_VMA)
 	}
 }
 
-pub const KERNEL_BASE: usize = 0xFFFFFF8000000000;
-
 // TODO: Sort this out.
 pub fn kernel_map(pml4: &mut PML4, start: PhysicalAddress, pages: usize) {
-	assert!(pages <= 2, "TODO: ID map more than two pages");
+	assert!(pages <= 2, "TODO: ID map more than two pages {}", pages);
 	// HACK: Don't touch the first meg.
 	let region_start = Page::new(start.clone(), 0).entry();
 	if region_start < 0x100000 {
