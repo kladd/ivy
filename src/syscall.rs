@@ -5,7 +5,7 @@ use core::{
 
 use log::{info, trace};
 
-use crate::devices::serial;
+use crate::{arch::amd64::clock, devices::serial};
 
 static LETTER: AtomicU8 = AtomicU8::new('a' as u8);
 
@@ -20,6 +20,7 @@ pub struct RegisterState {
 pub unsafe extern "C" fn syscall_enter(regs: &RegisterState) {
 	match regs.rax {
 		400 => putc(LETTER.load(Ordering::Acquire) as char),
+		401 => uptime(),
 		_ => trace!("unknown syscall: {}", regs.rax),
 	};
 }
@@ -27,4 +28,8 @@ pub unsafe extern "C" fn syscall_enter(regs: &RegisterState) {
 fn putc(c: char) {
 	LETTER.store((c as u8) + 1, Ordering::Release);
 	writeln!(serial::com1().lock(), "{c}").unwrap();
+}
+
+fn uptime() {
+	writeln!(serial::com1().lock(), "{}", clock::uptime_seconds()).unwrap();
 }
