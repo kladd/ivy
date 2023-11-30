@@ -10,10 +10,16 @@ _syscall_enter:
 	mov [gs:0 + 8], rsp
 	mov rsp, [gs:0]
 
-	call syscall_enter
-	int 0x3
-	hlt
+	push rax
+	push rdi
+	push rcx
 
+	mov rdi, rsp
+	call syscall_enter
+
+	pop rcx
+	pop rdi
+	pop rax
 _syscall_ret:
 	cli
 	rdgsbase r11
@@ -22,39 +28,3 @@ _syscall_ret:
 	mov r11, 0x202
 	swapgs
 	o64 sysret
-
-	;;
-	;; TODO: this doesn't belong here.
-	;;
-
-	global outsl_asm
-	;; (rdi: len, rsi: src, rdx: port)
-outsl_asm:
-	push rbp
-	mov rbp, rsp
-
-	push rcx
-	mov rcx, rdi
-
-	rep outsd
-
-	pop rcx
-
-	pop rbp
-	ret
-
-	global insl_asm
-	;; (rdi: dst, rsi: len, rdx: port)
-insl_asm:
-	push rbp
-	mov rbp, rsp
-
-	push rcx
-	mov rcx, rsi
-
-	rep insd
-
-	pop rcx
-
-	pop rbp
-	ret

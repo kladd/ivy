@@ -23,13 +23,14 @@ mod mem;
 mod multiboot;
 mod proc;
 mod sync;
+mod syscall;
 
 use alloc::vec::Vec;
 use core::{
 	arch::asm, cmp::min, fmt::Write, mem::size_of, panic::PanicInfo, ptr, slice,
 };
 
-use log::{debug, error, trace};
+use log::{debug, error};
 
 use crate::{
 	arch::amd64::{
@@ -281,11 +282,6 @@ pub fn dump_pt(pt: *mut PageTable, level: PageTableLevel) {
 			});
 		}
 	}
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn syscall_enter() {
-	trace!("syscall_enter");
 }
 
 extern "C" {

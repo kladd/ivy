@@ -21,10 +21,10 @@ $(tgt):
 
 # ASM files are packaged into libboot.a and statically linked with the kernel
 # executable.
-$(tgt)/boot.o: boot/boot.asm $(tgt)
-	nasm -felf64 $< -o $@
-$(tgt)/syscall.o: src/arch/amd64/syscall.asm $(tgt)
-	nasm -felf64 $< -o $@
+$(tgt)/boot.o: boot/boot.asm | $(tgt)
+	nasm -felf64 $^ -o $@
+$(tgt)/syscall.o: src/arch/amd64/syscall.asm | $(tgt)
+	nasm -felf64 $^ -o $@
 $(boot_lib): $(tgt)/boot.o $(tgt)/syscall.o
 	ar rvs $@ $^
 

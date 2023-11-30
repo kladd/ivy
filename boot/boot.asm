@@ -105,6 +105,38 @@ init_syscalls:
 idle:	hlt
 	jmp idle
 
+	global outsl_asm
+	;; (rdi: len, rsi: src, rdx: port)
+outsl_asm:
+	push rbp
+	mov rbp, rsp
+
+	push rcx
+	mov rcx, rdi
+
+	rep outsd
+
+	pop rcx
+
+	pop rbp
+	ret
+
+	global insl_asm
+	;; (rdi: dst, rsi: len, rdx: port)
+insl_asm:
+	push rbp
+	mov rbp, rsp
+
+	push rcx
+	mov rcx, rsi
+
+	rep insd
+
+	pop rcx
+
+	pop rbp
+	ret
+
 section .data
 align 0x1000
 boot_pd:
