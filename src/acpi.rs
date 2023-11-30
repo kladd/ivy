@@ -1,10 +1,7 @@
 //! https://uefi.org/htmlspecs/ACPI_Spec_6_4_html/21_ACPI_Data_Tables_and_Table_Def_Language/ACPI_Data_Tables.html
 
-use alloc::{
-	string::{String, ToString},
-	vec::Vec,
-};
-use core::{mem, ptr, slice};
+use alloc::vec::Vec;
+use core::{mem, slice};
 
 use log::{debug, trace};
 
@@ -22,6 +19,19 @@ pub struct RSDP {
 	xsdt_addr: u64,
 	echecksum: u8,
 	reserved: [u8; 3],
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct MCFG {
+	header: ACPITableHeader,
+	config_space: Vec<ConfigEntry>,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct ConfigEntry {
+	base_address: u64,
 }
 
 #[repr(C)]
@@ -83,6 +93,26 @@ impl RSDT {
 			};
 			debug!("{}", header.signature());
 		}
+	}
+
+	fn find(&self, sig: &str) -> Option<ACPITableHeader> {
+		for a in &self.entries {
+			let header: ACPITableHeader = unsafe {
+				core::intrinsics::unaligned_volatile_load(
+					PhysicalAddress(*a as usize).to_virtual(),
+				)
+			};
+			if sig == header.signature() {
+				return Some(header);
+			}
+		}
+		None
+	}
+
+	pub fn mcfg(&self) -> Option<MCFG> {
+		let header = self.find("MCFG").unwrap();
+		kdbg!(header);
+		None
 	}
 }
 
