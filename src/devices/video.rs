@@ -1,31 +1,41 @@
+use alloc::boxed::Box;
 use core::slice;
 
-use crate::font::PSF2Font;
+use crate::{font::PSF2Font, mem::PhysicalAddress, sync::StaticPtr};
 
-pub struct Video<'font>(&'static mut [u32], &'font PSF2Font);
+static VD0: StaticPtr<Video> = StaticPtr::new();
+
+pub struct Video {
+	framebuffer: Box<&'static mut [u32]>,
+	font: Box<&'static PSF2Font>,
+}
+
+pub fn init(frame_buffer: PhysicalAddress, len: usize, font: PhysicalAddress) {
+	VD0.init(Video {
+		framebuffer: Box::new(unsafe {
+			slice::from_raw_parts_mut(frame_buffer.to_virtual(), len)
+		}),
+		font: Box::new(unsafe { &*font.to_virtual() }),
+	})
+}
+
+pub fn vd0() -> &'static mut Video {
+	VD0.borrow()
+}
 
 #[derive(Copy, Clone)]
 pub struct Color(u8, u8, u8);
 
 const A: u64 = 0xCCCCCCFC_CCCCCC78;
 
-impl<'font> Video<'font> {
+impl Video {
 	const WIDTH: usize = 1024;
 	const HEIGHT: usize = 768;
 	const BG: Color = Color(0xFF, 0xFF, 0xFF);
 	const FG: Color = Color(0x00, 0x00, 0x00);
 
-	pub fn new(addr: *mut u32, font: &'font PSF2Font) -> Self {
-		Self(
-			unsafe {
-				slice::from_raw_parts_mut(addr, Self::WIDTH * Self::HEIGHT)
-			},
-			font,
-		)
-	}
-
 	pub fn test(&mut self) {
-		for (i, pixel) in self.0.iter_mut().enumerate() {
+		for (i, pixel) in self.framebuffer.iter_mut().enumerate() {
 			*pixel = Self::BG.into();
 		}
 
@@ -37,24 +47,24 @@ impl<'font> Video<'font> {
 	}
 
 	pub fn blank(&mut self, x: usize, y: usize) {
-		let glyph_height = self.1.header.height as usize;
-		let glyph_width = self.1.header.width as usize;
+		let glyph_height = self.font.header.height as usize;
+		let glyph_width = self.font.header.width as usize;
 
 		for row in 0..glyph_height {
 			for col in 0..glyph_width {
 				let pos = (row + y * glyph_height) * Self::WIDTH
 					+ col + (x * glyph_width);
-				self.0[pos] = Self::BG.into();
+				self.framebuffer[pos] = Self::BG.into();
 			}
 		}
 	}
 
 	pub fn glyph(&mut self, c: char, x: usize, y: usize) {
-		let glyph = &self.1.data[c as usize];
-		let glyph_height = self.1.header.height as usize;
-		let glyph_width = self.1.header.width as usize;
+		let glyph = &self.font.data[c as usize];
+		let glyph_height = self.font.header.height as usize;
+		let glyph_width = self.font.header.width as usize;
 		let bytes_per_row =
-			(self.1.header.glyph_sz / self.1.header.height) as usize;
+			(self.font.header.glyph_sz / self.font.header.height) as usize;
 
 		// TODO: This is hacky as all get-out.
 		for row in 0..glyph_height {
@@ -67,9 +77,9 @@ impl<'font> Video<'font> {
 					+ col + (x * glyph_width);
 
 				if (byte >> glyph_offset) & 1 != 0 {
-					self.0[pos] = Self::FG.into();
+					self.framebuffer[pos] = Self::FG.into();
 				} else {
-					self.0[pos] = Self::BG.into();
+					self.framebuffer[pos] = Self::BG.into();
 				}
 			}
 		}

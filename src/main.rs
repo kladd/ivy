@@ -42,14 +42,7 @@ use crate::{
 		sti,
 		vmem::{PageTable, BOOT_PML4_TABLE, PML4},
 	},
-	devices::{
-		keyboard::{init_keyboard, KBD},
-		pci::enumerate_pci,
-		serial,
-		video::Video,
-		video_terminal::VideoTerminal,
-	},
-	font::PSF2Font,
+	devices::{keyboard::init_keyboard, pci::enumerate_pci, serial, video},
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
 	mem::{
@@ -114,17 +107,12 @@ pub extern "C" fn kernel_start(
 		)
 	};
 
-	let font: &PSF2Font =
-		unsafe { &*PhysicalAddress(mods[1].start as usize).to_virtual() };
-	font.debug('&');
-
-	let screen = Video::new(
-		PhysicalAddress(multiboot_info.framebuffer_addr as usize).to_virtual(),
-		font,
+	video::init(
+		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
+		multiboot_info.framebuffer_width as usize
+			* multiboot_info.framebuffer_height as usize,
+		PhysicalAddress(mods[1].start as usize),
 	);
-	let mut video_term = unsafe { VideoTerminal::new(screen, &mut KBD) };
-
-	video_term.clear();
 
 	// FIXME: ID map initrd to load user program.
 	kernel_map(

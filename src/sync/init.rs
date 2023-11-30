@@ -1,12 +1,43 @@
+use alloc::boxed::Box;
 use core::{
 	cell::UnsafeCell,
-	sync::atomic::{AtomicBool, Ordering},
+	ptr,
+	sync::atomic::{AtomicBool, AtomicPtr, Ordering},
 };
 
 pub struct InitOnce<T: Sync> {
 	done: AtomicBool,
 	data: UnsafeCell<Option<T>>,
 }
+
+pub struct StaticPtr<T>(AtomicPtr<T>);
+
+impl<T> StaticPtr<T> {
+	pub const fn new() -> Self {
+		Self(AtomicPtr::new(ptr::null_mut()))
+	}
+
+	pub fn init(&self, value: T) {
+		self.0
+			.compare_exchange(
+				ptr::null_mut(),
+				Box::into_raw(Box::new(value)),
+				Ordering::SeqCst,
+				Ordering::Relaxed,
+			)
+			.expect("StaticPtr already initialized");
+	}
+
+	pub fn borrow(&self) -> &mut T {
+		let val = self.0.load(Ordering::Acquire);
+		if val.is_null() {
+			panic!("Accessed uninitialized static ptr");
+		}
+		unsafe { &mut *val }
+	}
+}
+
+unsafe impl<T> Sync for StaticPtr<T> {}
 
 impl<T: Sync> InitOnce<T> {
 	pub const fn new() -> Self {
