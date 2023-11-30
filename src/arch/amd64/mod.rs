@@ -24,6 +24,22 @@ pub fn outb(port: u16, b: u8) {
 	}
 }
 
+pub fn outl(port: u16, l: u32) {
+	unsafe { asm!("out dx, eax", in("dx") port, in("eax") l) };
+}
+
+pub fn inl(port: u16) -> u32 {
+	let mut l: u32;
+	unsafe { asm!("in eax, dx", in("dx") port, out("eax") l) };
+	l
+}
+
+pub fn inw(port: u16) -> u16 {
+	let mut w: u16;
+	unsafe { asm!("in eax, dx", in("dx") port, out("ax") w) };
+	w
+}
+
 pub fn outsl(count: usize, src: usize, port: u16) {
 	unsafe { outsl_asm(count, src, port) }
 }

@@ -20,13 +20,13 @@ impl log::Log for KernelLogger {
 		if self.enabled(record.metadata()) {
 			writeln!(
 				serial::com1().lock(),
-				"{}{:>5}{} [{}:{}]: {}",
+				"{}{:>5} [{}:{}]: {}{}",
 				Self::start_color(record.metadata()),
 				record.level(),
-				COLOR_DEFAULT,
 				record.file().unwrap(),
 				record.line().unwrap(),
-				record.args()
+				record.args(),
+				COLOR_DEFAULT
 			)
 			.unwrap();
 		}

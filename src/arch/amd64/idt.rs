@@ -92,7 +92,7 @@ pub fn init_idt() {
 		register_handler_code(11, print_irq_code);
 		register_handler_code(12, print_irq_code);
 		register_handler_code(13, print_irq_code);
-		register_handler_code(14, print_irq_code);
+		register_handler_code(14, page_fault);
 		register_handler(16, print_irq);
 		register_handler_code(17, print_irq_code);
 		register_handler_code(18, print_irq_code);

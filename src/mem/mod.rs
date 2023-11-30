@@ -41,7 +41,7 @@ impl<T> From<*mut T> for PhysicalAddress {
 // TODO: Sort this out.
 pub fn kernel_map(pml4: &mut PML4, start: PhysicalAddress, pages: usize) {
 	assert!(pages <= 2, "TODO: ID map more than two pages {}", pages);
-	// HACK: Don't touch the first meg.
+	// HACK: Don't touch the first meg. TODO: I can't remember why.
 	let region_start = Page::new(start.clone(), 0).entry();
 	if region_start < 0x100000 {
 		return;

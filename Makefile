@@ -55,9 +55,7 @@ run: $(rom) $(tgt)/_disk_image
 	qemu-system-x86_64$(exe) -cdrom $(rom) \
 		--enable-kvm \
 		-cpu host \
-		-machine q35 \
-		-drive file=$(tgt)/_disk_image,format=raw \
-		-d int \
+		-drive file=$(tgt)/_disk_image,format=raw,if=ide \
 		-m 2g \
 		-no-reboot \
 		-no-shutdown \

@@ -14,7 +14,6 @@ extern crate alloc;
 mod arch;
 #[macro_use]
 mod debug;
-mod acpi;
 mod devices;
 mod font;
 mod fs;
@@ -30,10 +29,9 @@ use core::{
 	arch::asm, cmp::min, fmt::Write, mem::size_of, panic::PanicInfo, ptr, slice,
 };
 
-use log::{debug, error, info};
+use log::{debug, error, trace};
 
 use crate::{
-	acpi::find_rsdp,
 	arch::amd64::{
 		cli,
 		clock::init_clock,
@@ -45,6 +43,7 @@ use crate::{
 	},
 	devices::{
 		keyboard::{init_keyboard, KBD},
+		pci::enumerate_pci,
 		serial,
 		video::Video,
 		video_terminal::VideoTerminal,
@@ -82,15 +81,12 @@ pub extern "C" fn kernel_start(
 	debug!("{:#08X?}", multiboot_magic);
 	kdbg!(multiboot_info);
 
-	let rsdp = unsafe { &*find_rsdp() };
-
 	KernelAllocator::init(_kernel_end as usize, 0x200000);
 
 	debug!("kernel end {:016X}", _kernel_end as usize - KERNEL_VMA);
 
 	init_idt();
 	init_pic();
-	debug!("rsdt: 0x{:016X}", rsdp.rsdt_addr);
 	init_clock();
 	init_keyboard();
 
@@ -101,10 +97,11 @@ pub extern "C" fn kernel_start(
 
 	let mut frame_allocator = init_frame_allocator(&memory_map);
 
-	dump_pt(BOOT_PML4_TABLE, PageTableLevel::PML4);
-	kdbg!(rsdp.rsdt()).test();
-
-	breakpoint!();
+	let pci_devices = enumerate_pci();
+	let storage_device = pci_devices
+		.iter()
+		.find(|dev| dev.class() == 0x0101)
+		.expect("No storage devices found");
 
 	sti();
 
@@ -127,26 +124,28 @@ pub extern "C" fn kernel_start(
 	let mut video_term = unsafe { VideoTerminal::new(screen, &mut KBD) };
 
 	video_term.clear();
-	loop {
-		match video_term.read_line().as_str() {
-			"test" => video_term.test(),
-			"echo" => video_term.write_str("this is an echo\n").unwrap(),
-			_ => {}
-		}
-	}
+
+	// FIXME: ID map initrd to load user program.
+	kernel_map(
+		kernel_page_table,
+		PhysicalAddress(mods[0].start as usize),
+		(mods[0].end as usize - mods[0].start as usize).div_ceil(PAGE_SIZE),
+	);
+	dump_pt(BOOT_PML4_TABLE, PageTableLevel::PML4);
 
 	let mut cpu = CPU::default();
 	cpu.store();
 
 	// First user process.
-	let task = Task::new(&mut frame_allocator, "gp_fault");
+	let task = Task::new(&mut frame_allocator, "user");
 	// Switch to task page directory.
 	unsafe { asm!("mov cr3, {}", in(reg) task.cr3) };
-	// Load task code into 4MB (arbitrarily chosen entry point).
+	// Load user program at start location.
 	unsafe {
 		ptr::copy_nonoverlapping(
 			PhysicalAddress(mods[0].start as usize).to_virtual(),
-			0x400000 as *mut u8,
+			// TODO: This can't be 0, would it ever be?
+			Task::START_ADDR as *mut u8,
 			(mods[0].end - mods[0].start) as usize,
 		);
 	}
@@ -272,12 +271,12 @@ impl PageTableLevel {
 	}
 }
 
-fn dump_pt(pt: *mut PageTable, level: PageTableLevel) {
+pub fn dump_pt(pt: *mut PageTable, level: PageTableLevel) {
 	for (i, ent) in unsafe { &*pt }.0.iter().enumerate() {
 		if *ent != 0 {
-			info!("{}[{i:03}] = {:016X}", level.indent(), ent & !0b10000);
+			debug!("{}[{i:03}] = {:016X}", level.indent(), ent & !0b10000);
 			level.next(*ent).map(|(pt, pl)| {
-				info!("{}[ ~ ] = {:016X}", level.indent(), pt as usize);
+				debug!("{}[ ~ ] = {:016X}", level.indent(), pt as usize);
 				dump_pt(pt, pl)
 			});
 		}
@@ -286,7 +285,7 @@ fn dump_pt(pt: *mut PageTable, level: PageTableLevel) {
 
 #[no_mangle]
 pub unsafe extern "C" fn syscall_enter() {
-	asm!("mov r12, 0xdecafbad");
+	trace!("syscall_enter");
 }
 
 extern "C" {
