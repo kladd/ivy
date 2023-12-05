@@ -53,9 +53,9 @@ $(tgt)/_disk_image: base
 
 run: $(rom) $(tgt)/_disk_image
 	qemu-system-x86_64$(exe) -cdrom $(rom) \
-		--enable-kvm \
-		-cpu host \
+		-cpu Broadwell \
 		-drive file=$(tgt)/_disk_image,format=raw,if=ide \
+		-d int \
 		-m 2g \
 		-no-reboot \
 		-no-shutdown \

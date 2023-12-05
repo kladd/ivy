@@ -22,6 +22,7 @@ pub struct RegisterState {
 #[no_mangle]
 pub unsafe extern "C" fn syscall_enter(regs: &RegisterState) {
 	match regs.rax {
+		60 => exit(),
 		400 => putc(LETTER.load(Ordering::Acquire) as char),
 		401 => uptime(),
 		402 => video(),
@@ -40,4 +41,8 @@ fn uptime() {
 
 fn video() {
 	vd0().test();
+}
+
+fn exit() {
+	breakpoint!();
 }

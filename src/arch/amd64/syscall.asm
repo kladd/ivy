@@ -9,6 +9,7 @@ _syscall_enter:
 	swapgs
 	mov [gs:0 + 8], rsp
 	mov rsp, [gs:0]
+	sti
 
 	push rax
 	push rdi

@@ -2,13 +2,17 @@ use alloc::{alloc::alloc_zeroed, boxed::Box};
 use core::{
 	alloc::Layout,
 	arch::asm,
+	intrinsics::size_of,
 	sync::atomic::{AtomicU64, Ordering},
 };
 
 use log::{debug, warn};
 
 use crate::{
-	arch::amd64::vmem::{PageTable, BOOT_PML4_TABLE},
+	arch::amd64::{
+		idt::InterruptEntry,
+		vmem::{PageTable, BOOT_PML4_TABLE},
+	},
 	mem::{frame::FrameAllocator, page::Page, KERNEL_VMA, PAGE_SIZE},
 };
 
@@ -43,7 +47,7 @@ impl Task {
 
 	pub fn new(falloc: &mut FrameAllocator, name: &'static str) -> Self {
 		let rbp = Self::START_ADDR + PAGE_SIZE - Self::STACK_SIZE;
-		let rsp = Self::START_ADDR + PAGE_SIZE;
+		let rsp = Self::START_ADDR + PAGE_SIZE - size_of::<InterruptEntry>();
 
 		let frame = falloc.alloc();
 		let page = Page::new(frame, 0x87);

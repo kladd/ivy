@@ -1,6 +1,7 @@
 use core::arch::asm;
 
 pub mod clock;
+pub mod gdt;
 pub mod idt;
 pub mod pic;
 pub mod vmem;

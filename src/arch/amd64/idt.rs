@@ -95,9 +95,13 @@ pub fn init_idt() {
 		register_handler_code(14, page_fault);
 		register_handler(16, print_irq);
 		register_handler_code(17, print_irq_code);
-		register_handler_code(18, print_irq_code);
-		register_handler_code(19, print_irq_code);
-		register_handler_code(20, print_irq_code);
+		register_handler(18, print_irq);
+		register_handler(19, print_irq);
+		register_handler(20, print_irq);
+		register_handler_code(21, print_irq_code);
+		register_handler(28, print_irq);
+		register_handler_code(29, print_irq_code);
+		register_handler_code(30, print_irq_code);
 
 		flush_idt();
 	}

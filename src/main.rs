@@ -36,7 +36,7 @@ use crate::{
 	arch::amd64::{
 		cli,
 		clock::init_clock,
-		hlt,
+		gdt, hlt,
 		idt::init_idt,
 		pic::init_pic,
 		sti,
@@ -67,7 +67,9 @@ fn panic(info: &PanicInfo) -> ! {
 pub extern "C" fn kernel_start(
 	multiboot_magic: u32,
 	multiboot_info: &MultibootInfo,
-) -> ! {
+) {
+	gdt::adopt_boot_gdt();
+
 	serial::init();
 	log::set_logger(&LOGGER).unwrap();
 	log::set_max_level(log::STATIC_MAX_LEVEL);
@@ -92,12 +94,6 @@ pub extern "C" fn kernel_start(
 	let mut frame_allocator = init_frame_allocator(&memory_map);
 
 	let pci_devices = enumerate_pci();
-	let storage_device = pci_devices
-		.iter()
-		.find(|dev| dev.class() == 0x0101)
-		.expect("No storage devices found");
-
-	sti();
 
 	// Load user program from initrd since we don't have a filesystem yet.
 	let mods: &[MultibootModuleEntry] = unsafe {
@@ -114,21 +110,21 @@ pub extern "C" fn kernel_start(
 		PhysicalAddress(mods[1].start as usize),
 	);
 
-	// FIXME: ID map initrd to load user program.
 	kernel_map(
 		kernel_page_table,
 		PhysicalAddress(mods[0].start as usize),
 		(mods[0].end as usize - mods[0].start as usize).div_ceil(PAGE_SIZE),
 	);
-	dump_pt(BOOT_PML4_TABLE, PageTableLevel::PML4);
 
 	let mut cpu = CPU::default();
 	cpu.store();
 
 	// First user process.
 	let task = Task::new(&mut frame_allocator, "user");
+
 	// Switch to task page directory.
 	unsafe { asm!("mov cr3, {}", in(reg) task.cr3) };
+
 	// Load user program at start location.
 	unsafe {
 		ptr::copy_nonoverlapping(
@@ -138,6 +134,7 @@ pub extern "C" fn kernel_start(
 			(mods[0].end - mods[0].start) as usize,
 		);
 	}
+
 	// SYSRET to user program.
 	unsafe {
 		cpu.rsp3 = task.rsp;
