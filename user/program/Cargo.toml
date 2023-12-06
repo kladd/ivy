@@ -1,0 +1,10 @@
+[package]
+name = "program"
+version = "0.1.0"
+edition = "2021"
+
+[profile.dev]
+debug = false
+
+[dependencies]
+sys = { path = "../sys" }

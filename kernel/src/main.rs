@@ -131,9 +131,11 @@ pub extern "C" fn kernel_start(
 			PhysicalAddress(mods[0].start as usize).to_virtual(),
 			// TODO: This can't be 0, would it ever be?
 			Task::START_ADDR as *mut u8,
-			(mods[0].end - mods[0].start) as usize,
+			kdbg!((mods[0].end - mods[0].start) as usize),
 		);
 	}
+
+	breakpoint!();
 
 	// SYSRET to user program.
 	unsafe {

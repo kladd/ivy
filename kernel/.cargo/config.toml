@@ -1,7 +1,7 @@
 [build]
 target = "x86_64-unknown-lucy.json"
 rustflags = [
-    "-L", "target",
+    "-L", "target/x86_64-unknown-lucy/debug",
     "-l", "boot",
     "-C", "link-args=-n -Tboot/linker.ld"
 ]

@@ -1,69 +1,54 @@
-# Requires:
-#  - nasm
-#  - xorriso
-#  - grub-core
-#  - grub-pc-bin
-#  - qemu
-#  - ld
-#  - rustc
-
-tgt := target
-rom := $(tgt)/lucy.rom
 exe := "$(shell cat /proc/version | grep -q microsoft && echo ".exe")"
-kernel := $(tgt)/x86_64-unknown-lucy/debug/lucy
-boot_lib := $(tgt)/libboot.a
-initrd := $(tgt)/lucy.initrd
 disk_size := 1g
 
+target := target/x86_64-unknown-lucy/debug
+rom := $(target)/lucy.iso
+initrd := $(target)/lucy.initrd
+kernel := $(target)/lucy
+lib_boot := $(target)/libboot.a
+user_program := target/x86_64-unknown-none/release/program
+
+.PHONY: all
 all: $(rom)
-$(tgt):
-	mkdir -p $(tgt)
 
-# ASM files are packaged into libboot.a and statically linked with the kernel
-# executable.
-$(tgt)/boot.o: boot/boot.asm | $(tgt)
+$(kernel): $(shell find kernel) $(lib_boot) boot/linker.ld
+	cargo -Z unstable-options -C kernel build -p lucy
+$(user_program): $(shell find user/program)
+	cargo -Z unstable-options -C user/program build -p program --release
+$(target)/boot.o: boot/boot.asm | $(target)
 	nasm -felf64 $^ -o $@
-$(tgt)/syscall.o: src/arch/amd64/syscall.asm | $(tgt)
-	nasm -felf64 $^ -o $@
-$(boot_lib): $(tgt)/boot.o $(tgt)/syscall.o
+$(target)/syscall.o: $(shell find kernel/src -name 'syscall.asm') | $(target)
+	nasm -felf64 $< -o $@
+$(lib_boot): $(target)/boot.o $(target)/syscall.o
 	ar rvs $@ $^
-
-# Kernel binary.
-$(kernel): always $(boot_lib)
-	cargo build
-
-# Test user program is assembled without linking, loaded into ramdisk by GRUB.
-$(initrd): user/user.asm
-	mkdir -p $(tgt)
-	nasm -o $@ $<
-
-# Kernel boots from ROM.
-# TODO: A font.
-$(rom): boot/grub.cfg $(kernel) $(initrd)
-	mkdir -p $(tgt)/rom/boot/grub
-	cp boot/grub.cfg $(tgt)/rom/boot/grub/grub.cfg
-	cp $(kernel) $(tgt)/rom/boot/lucy
-	cp $(initrd) $(tgt)/rom/boot/lucy.initrd
-	gunzip -c /usr/share/kbd/consolefonts/sun12x22.psfu.gz > $(tgt)/rom/boot/font.psfu
-	grub-mkrescue -o $(rom) $(tgt)/rom
-
-$(tgt)/_disk_image: base
+$(initrd): $(user_program)
+	cp $< $@
+$(rom): $(kernel) $(initrd)
+	mkdir -p $(target)/rom/boot/grub
+	cp boot/grub.cfg $(target)/rom/boot/grub/grub.cfg
+	cp $(kernel) $(target)/rom/boot/lucy
+	cp $(initrd) $(target)/rom/boot/lucy.initrd
+	gunzip -c /usr/share/kbd/consolefonts/sun12x22.psfu.gz > $(target)/rom/boot/font.psfu
+	grub-mkrescue -o $@ $(target)/rom
+$(target)/_disk_image: $(shell find base)
 	qemu-img$(exe) create -f raw $@ $(disk_size)
 	mkfs.ext2 -d base $@
+$(target):
+	mkdir -p $@
 
-run: $(rom) $(tgt)/_disk_image
+.PHONY: run
+run: $(rom) $(target)/_disk_image
 	qemu-system-x86_64$(exe) -cdrom $(rom) \
 		-cpu Broadwell \
-		-drive file=$(tgt)/_disk_image,format=raw,if=ide \
+		-drive file=$(target)/_disk_image,format=raw,if=ide \
 		-d int \
 		-m 2g \
 		-no-reboot \
 		-no-shutdown \
 		-serial stdio
+
 .PHONY: clean
 clean:
-	$(RM) -r $(rom) $(tgt)/boot.o $(tgt)/boot.elf $(tgt)/rom
+	$(RM) -r $(rom) $(target)/boot.o $(target)/syscall.o $(target)/rom
 	cargo clean
 
-.PHONY: always
-always: ;
