@@ -38,7 +38,7 @@ impl PML4 {
 		self.0[index] = PhysicalAddress::from(Box::into_raw(pdp)).0 + flags;
 	}
 
-	pub fn get(&mut self, index: usize) -> Option<&mut PDP> {
+	pub fn get(&self, index: usize) -> Option<&mut PDP> {
 		if self.0[index] == 0 {
 			None
 		} else {

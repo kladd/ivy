@@ -26,7 +26,7 @@ mod proc;
 mod sync;
 mod syscall;
 
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 use core::{
 	arch::asm, cmp::min, fmt::Write, mem::size_of, panic::PanicInfo, ptr, slice,
 };
@@ -117,21 +117,22 @@ pub extern "C" fn kernel_start(
 		(mods[0].end as usize - mods[0].start as usize).div_ceil(PAGE_SIZE),
 	);
 
-	let mut cpu = CPU::default();
-	cpu.store();
-
 	// First user process.
 	let mut task = Task::new(&mut frame_allocator, "user");
 
 	// Switch to task page directory.
 	unsafe { asm!("mov cr3, {}", in(reg) task.cr3) };
-
 	elf::load(PhysicalAddress(mods[0].start as usize), &mut task);
+
+	let mut cpu = CPU::new();
+	let entry = task.rip;
+	cpu.rsp3 = task.rsp;
+	cpu.task = Box::into_raw(Box::new(task));
+	cpu.store();
 
 	// SYSRET to user program.
 	unsafe {
-		cpu.rsp3 = task.rsp;
-		asm!("jmp _syscall_ret", in("rcx") task.rip, options(nostack, noreturn))
+		asm!("jmp _syscall_ret", in("rcx") entry, options(nostack, noreturn))
 	}
 }
 

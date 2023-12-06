@@ -20,7 +20,8 @@ _syscall_enter:
 
 	pop rcx
 	pop rdi
-	pop rax
+	;; skip restoring rax to preserve return value
+	add rsp, 8
 _syscall_ret:
 	cli
 	rdgsbase r11

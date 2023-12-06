@@ -3,6 +3,7 @@ use core::{
 	alloc::Layout,
 	arch::asm,
 	intrinsics::size_of,
+	ptr,
 	sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -18,15 +19,31 @@ use crate::{
 
 static NEXT_PID: AtomicU64 = AtomicU64::new(0);
 
-#[derive(Default)]
 pub struct CPU {
 	pub rsp0: usize,
 	pub rsp3: usize,
+	pub task: *mut Task,
 }
 
 impl CPU {
 	pub fn store(&mut self) {
 		unsafe { asm!("wrgsbase {}", in(reg) self as *mut Self) };
+	}
+
+	pub fn load() -> &'static Self {
+		let mut cpu: u64;
+		unsafe {
+			asm!("rdgsbase {}", out(reg) cpu);
+			&*(cpu as *mut Self)
+		}
+	}
+
+	pub fn new() -> Self {
+		Self {
+			rsp0: 0,
+			rsp3: 0,
+			task: ptr::null_mut(),
+		}
 	}
 }
 
@@ -49,6 +66,7 @@ impl Task {
 		let rbp = PAGE_SIZE;
 		let rsp = 2 * PAGE_SIZE - size_of::<InterruptEntry>();
 
+		// HACK: Programs better not exceed 2MB!!
 		let program_page = Page::new(falloc.alloc(), 0x87);
 		let stack_page = Page::new(falloc.alloc(), 0x87);
 
@@ -78,24 +96,9 @@ impl Task {
 		pd[pd_i] = program_page.entry();
 		// HACK: Stack is code page plus one..
 		pd[pd_i + 1] = stack_page.entry();
-		for (i, ent) in pd.0.iter().enumerate() {
-			if *ent != 0 {
-				warn!("pd[{i}] = {ent:016X}");
-			}
-		}
 		// TODO: Flags.
 		pdp[pdp_i] = Box::leak(pd) as *mut _ as usize - KERNEL_VMA + 0x7;
-		for (i, ent) in pdp.0.iter().enumerate() {
-			if *ent != 0 {
-				warn!("pdp[{i}] = {ent:016X}");
-			}
-		}
 		pml4[pml4_i] = Box::leak(pdp) as *mut _ as usize - KERNEL_VMA + 0x7;
-		for (i, ent) in pml4.0.iter().enumerate() {
-			if *ent != 0 {
-				warn!("pml4[{i}] = {ent:016X}");
-			}
-		}
 
 		let cr3 = Box::leak(pml4) as *mut _ as usize;
 

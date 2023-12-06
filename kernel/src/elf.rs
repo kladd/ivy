@@ -43,6 +43,7 @@ enum ProgramHeaderFlags {
 #[derive(Debug)]
 struct ELF64Header {
 	e_ident: [u8; EI_NIDENT],
+	// TODO: No panics on malformed ELF headers.
 	e_type: ExecutableType,
 	e_machine: u16,
 	e_version: u32,
@@ -61,6 +62,7 @@ struct ELF64Header {
 #[repr(C)]
 #[derive(Debug)]
 struct ELF64ProgramHeader {
+	// TODO: No panics on malformed ELF headers.
 	p_type: ProgramHeaderType,
 	p_flags: u32,
 	p_offset: u64,
