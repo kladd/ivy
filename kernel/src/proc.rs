@@ -43,16 +43,17 @@ pub struct Task {
 impl Task {
 	const STACK_SIZE: usize = 0x1000;
 	const STACK_ALIGN: usize = 0x1000;
-	pub const START_ADDR: usize = 0x1000;
+	pub const START_ADDR: usize = 0x200000;
 
 	pub fn new(falloc: &mut FrameAllocator, name: &'static str) -> Self {
-		let rbp = Self::START_ADDR + PAGE_SIZE - Self::STACK_SIZE;
-		let rsp = Self::START_ADDR + PAGE_SIZE - size_of::<InterruptEntry>();
+		let rbp = PAGE_SIZE;
+		let rsp = 2 * PAGE_SIZE - size_of::<InterruptEntry>();
 
-		let frame = falloc.alloc();
-		let page = Page::new(frame, 0x87);
+		let program_page = Page::new(falloc.alloc(), 0x87);
+		let stack_page = Page::new(falloc.alloc(), 0x87);
 
-		debug!("page entry {:016X}", page.entry());
+		debug!("page entry {:016X}", program_page.entry());
+		debug!("stack entry {:016X}", stack_page.entry());
 
 		let (pml4_i, pdp_i, pd_i) = PageTable::index(Self::START_ADDR);
 
@@ -74,7 +75,9 @@ impl Task {
 				alloc_zeroed(Layout::new::<PageTable>()) as *mut PageTable
 			)
 		};
-		pd[pd_i] = page.entry();
+		pd[pd_i] = program_page.entry();
+		// HACK: Stack is code page plus one..
+		pd[pd_i + 1] = stack_page.entry();
 		for (i, ent) in pd.0.iter().enumerate() {
 			if *ent != 0 {
 				warn!("pd[{i}] = {ent:016X}");

@@ -15,6 +15,7 @@ mod arch;
 #[macro_use]
 mod debug;
 mod devices;
+mod elf;
 mod font;
 mod fs;
 mod kalloc;
@@ -120,22 +121,12 @@ pub extern "C" fn kernel_start(
 	cpu.store();
 
 	// First user process.
-	let task = Task::new(&mut frame_allocator, "user");
+	let mut task = Task::new(&mut frame_allocator, "user");
 
 	// Switch to task page directory.
 	unsafe { asm!("mov cr3, {}", in(reg) task.cr3) };
 
-	// Load user program at start location.
-	unsafe {
-		ptr::copy_nonoverlapping(
-			PhysicalAddress(mods[0].start as usize).to_virtual(),
-			// TODO: This can't be 0, would it ever be?
-			Task::START_ADDR as *mut u8,
-			kdbg!((mods[0].end - mods[0].start) as usize),
-		);
-	}
-
-	breakpoint!();
+	elf::load(PhysicalAddress(mods[0].start as usize), &mut task);
 
 	// SYSRET to user program.
 	unsafe {

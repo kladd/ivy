@@ -6,15 +6,15 @@ rom := $(target)/lucy.iso
 initrd := $(target)/lucy.initrd
 kernel := $(target)/lucy
 lib_boot := $(target)/libboot.a
-user_program := target/x86_64-unknown-none/release/program
+user_program := target/x86_64-unknown-none/debug/program
 
 .PHONY: all
 all: $(rom)
 
 $(kernel): $(shell find kernel) $(lib_boot) boot/linker.ld
 	cargo -Z unstable-options -C kernel build -p lucy
-$(user_program): $(shell find user/program)
-	cargo -Z unstable-options -C user/program build -p program --release
+$(user_program): $(shell find user)
+	cargo -Z unstable-options -C user/program build -p program
 $(target)/boot.o: boot/boot.asm | $(target)
 	nasm -felf64 $^ -o $@
 $(target)/syscall.o: $(shell find kernel/src -name 'syscall.asm') | $(target)
@@ -41,7 +41,6 @@ run: $(rom) $(target)/_disk_image
 	qemu-system-x86_64$(exe) -cdrom $(rom) \
 		-cpu Broadwell \
 		-drive file=$(target)/_disk_image,format=raw,if=ide \
-		-d int \
 		-m 2g \
 		-no-reboot \
 		-no-shutdown \

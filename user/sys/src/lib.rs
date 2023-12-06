@@ -1,5 +1,5 @@
 #![no_std]
 #![feature(core_intrinsics)]
 
-pub mod preamble;
+pub mod prelude;
 pub mod syscall;
