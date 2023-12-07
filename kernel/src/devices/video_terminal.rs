@@ -8,15 +8,23 @@ use crate::{
 	arch::amd64::hlt,
 	devices::{
 		character::{Keycode, ReadCharacter, WriteCharacter},
-		keyboard,
-		keyboard::Keyboard,
-		video::Video,
+		keyboard::KBD,
+		video::vd0,
 	},
+	sync::StaticPtr,
 };
 
-pub struct VideoTerminal<'a> {
-	screen: Video<'a>,
-	kbd: &'a mut Keyboard<{ keyboard::BUFFER_SIZE }>,
+static VDT0: StaticPtr<VideoTerminal> = StaticPtr::new();
+
+pub fn init() {
+	VDT0.init(VideoTerminal::new());
+}
+
+pub fn vdt0() -> &'static mut VideoTerminal {
+	VDT0.get()
+}
+
+pub struct VideoTerminal {
 	cursor: Cursor,
 	buf: [char; ROWS * COLS],
 }
@@ -26,17 +34,12 @@ struct Cursor {
 	col: usize,
 }
 
-impl<'a> VideoTerminal<'a> {
+impl VideoTerminal {
 	const MAX_LINE_LEN: usize = 78;
 	const CURSOR: char = 177u8 as char;
 
-	pub fn new(
-		video: Video<'a>,
-		kbd: &'a mut Keyboard<{ keyboard::BUFFER_SIZE }>,
-	) -> Self {
+	pub fn new() -> Self {
 		Self {
-			screen: video,
-			kbd,
 			cursor: Cursor { row: 0, col: 0 },
 			buf: [0u8 as char; ROWS * COLS],
 		}
@@ -44,13 +47,13 @@ impl<'a> VideoTerminal<'a> {
 
 	pub fn test(&mut self) {
 		self.clear();
-		self.screen.test();
+		vd0().test();
 	}
 
 	pub fn read_line(&mut self) -> String {
 		let mut s = String::with_capacity(Self::MAX_LINE_LEN);
 		loop {
-			match self.kbd.getc() {
+			match unsafe { KBD.getc() } {
 				Some(Keycode::Newline) => {
 					self.putc(Keycode::Newline);
 					self.blit();
@@ -136,13 +139,13 @@ impl<'a> VideoTerminal<'a> {
 	fn blit(&mut self) {
 		for row in 0..ROWS {
 			for col in 0..COLS {
-				self.screen.glyph(self.buf[row * COLS + col], col, row);
+				vd0().glyph(self.buf[row * COLS + col], col, row);
 			}
 		}
 	}
 }
 
-impl<'a> WriteCharacter for VideoTerminal<'a> {
+impl WriteCharacter for VideoTerminal {
 	fn putc(&mut self, keycode: Keycode) {
 		match keycode {
 			Keycode::Newline => self.newline(),
@@ -160,13 +163,13 @@ impl<'a> WriteCharacter for VideoTerminal<'a> {
 	}
 }
 
-impl<'a> ReadCharacter for VideoTerminal<'a> {
+impl ReadCharacter for VideoTerminal {
 	fn getc(&mut self) -> Option<Keycode> {
-		self.kbd.getc()
+		unsafe { KBD.getc() }
 	}
 }
 
-impl<'a> Write for VideoTerminal<'a> {
+impl Write for VideoTerminal {
 	fn write_str(&mut self, s: &str) -> core::fmt::Result {
 		for c in s.chars() {
 			match c {

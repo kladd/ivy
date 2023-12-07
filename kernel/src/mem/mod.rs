@@ -23,6 +23,7 @@ impl PhysicalAddress {
 		self.to_virtual_addr() as *mut T
 	}
 
+	// TODO: This works iff this page is identity (in high half) mapped.
 	pub fn to_virtual_addr(&self) -> usize {
 		self.0 | KERNEL_VMA
 	}

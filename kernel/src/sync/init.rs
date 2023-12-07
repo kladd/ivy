@@ -28,7 +28,7 @@ impl<T> StaticPtr<T> {
 			.expect("StaticPtr already initialized");
 	}
 
-	pub fn borrow(&self) -> &mut T {
+	pub fn get(&self) -> &mut T {
 		let val = self.0.load(Ordering::Acquire);
 		if val.is_null() {
 			panic!("Accessed uninitialized static ptr");

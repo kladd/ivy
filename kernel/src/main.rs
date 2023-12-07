@@ -43,11 +43,14 @@ use crate::{
 		sti,
 		vmem::{PageTable, BOOT_PML4_TABLE, PML4},
 	},
-	devices::{keyboard::init_keyboard, pci::enumerate_pci, serial, video},
+	devices::{
+		keyboard::init_keyboard, pci::enumerate_pci, serial, video,
+		video_terminal,
+	},
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
 	mem::{
-		frame::FrameAllocator, kernel_map, PhysicalAddress, KERNEL_LMA,
+		frame, frame::FrameAllocator, kernel_map, PhysicalAddress, KERNEL_LMA,
 		KERNEL_VMA, PAGE_SIZE,
 	},
 	multiboot::{MultibootInfo, MultibootMmapEntry, MultibootModuleEntry},
@@ -92,7 +95,7 @@ pub extern "C" fn kernel_start(
 	identity_map_reserved(kernel_page_table, &memory_map);
 	map_framebuffer(kernel_page_table, multiboot_info);
 
-	let mut frame_allocator = init_frame_allocator(&memory_map);
+	init_frame_allocator(&memory_map);
 
 	let pci_devices = enumerate_pci();
 
@@ -111,6 +114,9 @@ pub extern "C" fn kernel_start(
 		PhysicalAddress(mods[1].start as usize),
 	);
 
+	video_terminal::init();
+
+	// Map initrd to load the program stored there.
 	kernel_map(
 		kernel_page_table,
 		PhysicalAddress(mods[0].start as usize),
@@ -118,7 +124,7 @@ pub extern "C" fn kernel_start(
 	);
 
 	// First user process.
-	let mut task = Task::new(&mut frame_allocator, "user");
+	let mut task = Task::new("user");
 
 	// Switch to task page directory.
 	unsafe { asm!("mov cr3, {}", in(reg) task.cr3) };
@@ -188,9 +194,7 @@ fn map_framebuffer(
 	);
 }
 
-fn init_frame_allocator(
-	memory_map: &Vec<MultibootMmapEntry>,
-) -> FrameAllocator {
+fn init_frame_allocator(memory_map: &Vec<MultibootMmapEntry>) {
 	let largest_range = memory_map
 		.iter()
 		// Kind 1 = Available.
@@ -215,7 +219,7 @@ fn init_frame_allocator(
 	);
 
 	// TODO: Don't hardcode frame allocator region.
-	FrameAllocator::new(0x600000, 512 * PAGE_SIZE)
+	frame::init(0x600000, 512 * PAGE_SIZE);
 }
 
 enum PageTableLevel {

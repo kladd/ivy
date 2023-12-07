@@ -13,12 +13,16 @@ _syscall_enter:
 
 	push rax
 	push rdi
+	push rsi
+	push rdx
 	push rcx
 
 	mov rdi, rsp
 	call syscall_enter
 
 	pop rcx
+	pop rdx
+	pop rsi
 	pop rdi
 	;; skip restoring rax to preserve return value
 	add rsp, 8

@@ -1,11 +1,24 @@
 use log::{debug, trace};
 
-use crate::mem::{PhysicalAddress, PAGE_SIZE};
+use crate::{
+	mem::{PhysicalAddress, PAGE_SIZE},
+	sync::{SpinLock, StaticPtr},
+};
+
+static FRAME_ALLOCATOR: StaticPtr<SpinLock<FrameAllocator>> = StaticPtr::new();
 
 #[derive(Debug)]
 pub struct FrameAllocator {
 	placement: usize,
 	max: usize,
+}
+
+pub fn init(placement: usize, size: usize) {
+	FRAME_ALLOCATOR.init(SpinLock::new(FrameAllocator::new(placement, size)));
+}
+
+pub fn current_mut() -> &'static SpinLock<FrameAllocator> {
+	FRAME_ALLOCATOR.get()
 }
 
 impl FrameAllocator {

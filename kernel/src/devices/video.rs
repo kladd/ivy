@@ -20,7 +20,7 @@ pub fn init(frame_buffer: PhysicalAddress, len: usize, font: PhysicalAddress) {
 }
 
 pub fn vd0() -> &'static mut Video {
-	VD0.borrow()
+	VD0.get()
 }
 
 #[derive(Copy, Clone)]

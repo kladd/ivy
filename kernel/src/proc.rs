@@ -14,7 +14,7 @@ use crate::{
 		idt::InterruptEntry,
 		vmem::{PageTable, BOOT_PML4_TABLE},
 	},
-	mem::{frame::FrameAllocator, page::Page, KERNEL_VMA, PAGE_SIZE},
+	mem::{frame, frame::FrameAllocator, page::Page, KERNEL_VMA, PAGE_SIZE},
 };
 
 static NEXT_PID: AtomicU64 = AtomicU64::new(0);
@@ -62,9 +62,11 @@ impl Task {
 	const STACK_ALIGN: usize = 0x1000;
 	pub const START_ADDR: usize = 0x200000;
 
-	pub fn new(falloc: &mut FrameAllocator, name: &'static str) -> Self {
+	pub fn new(name: &'static str) -> Self {
 		let rbp = PAGE_SIZE;
 		let rsp = 2 * PAGE_SIZE - size_of::<InterruptEntry>();
+
+		let mut falloc = frame::current_mut().lock();
 
 		// HACK: Programs better not exceed 2MB!!
 		let program_page = Page::new(falloc.alloc(), 0x87);

@@ -1,14 +1,28 @@
 #![no_std]
 #![no_main]
 
-use sys::syscall::{brk, putc, video_test};
+extern crate alloc;
+
+use sys::syscall::{
+	brk, debug_long, print_line, read_line, video_clear, video_test, write,
+};
 
 #[no_mangle]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
-	let ret = brk(0);
+	let current_break = brk(0);
+	debug_long(current_break as u64);
 
-	putc((ret as u8 + '0' as u8) as char);
-	video_test();
+	video_clear();
+	loop {
+		let line = read_line();
 
-	ret as isize
+		match line.as_str() {
+			"test" => video_test(),
+			"clear" => video_clear(),
+			"exit" => break,
+			_ => print_line(&line),
+		}
+	}
+
+	0
 }

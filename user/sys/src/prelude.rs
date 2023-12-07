@@ -1,17 +1,21 @@
-use core::{arch::global_asm, panic::PanicInfo};
+use core::panic::PanicInfo;
 
-use crate::syscall::exit;
+use crate::{malloc::Allocator, sync::SpinLock, syscall::exit};
 
-global_asm! {
-	".global _start",
-	"_start:",
-	"call main",
-	"mov rdi, rax",
-	"mov eax, 60",
-	"syscall"
+extern "C" {
+	fn main() -> isize;
+}
+
+#[global_allocator]
+static GLOBAL_ALLOC: SpinLock<Allocator> = SpinLock::new(Allocator::new());
+
+#[export_name = "_start"]
+unsafe fn _start() {
+	GLOBAL_ALLOC.lock().init();
+	exit(main())
 }
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-	exit();
+	exit(101);
 }

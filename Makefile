@@ -12,9 +12,9 @@ user_program := target/x86_64-unknown-none/debug/program
 all: $(rom)
 
 $(kernel): $(shell find kernel) $(lib_boot) boot/linker.ld
-	cargo -Z unstable-options -C kernel build -p lucy
+	cargo -Z unstable-options -C kernel build
 $(user_program): $(shell find user)
-	cargo -Z unstable-options -C user/program build -p program
+	cargo -Z unstable-options -C user/program build
 $(target)/boot.o: boot/boot.asm | $(target)
 	nasm -felf64 $^ -o $@
 $(target)/syscall.o: $(shell find kernel/src -name 'syscall.asm') | $(target)
