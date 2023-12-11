@@ -47,6 +47,7 @@ use crate::{
 		keyboard::init_keyboard, pci::enumerate_pci, serial, video,
 		video_terminal,
 	},
+	fs::{device::DeviceFileSystem, fs0},
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
 	mem::{
@@ -122,6 +123,9 @@ pub extern "C" fn kernel_start(
 		PhysicalAddress(mods[0].start as usize),
 		(mods[0].end as usize - mods[0].start as usize).div_ceil(PAGE_SIZE),
 	);
+
+	fs::init();
+	fs0().mount_root(DeviceFileSystem.root());
 
 	// First user process.
 	let mut task = Task::new("user");

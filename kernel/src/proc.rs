@@ -14,6 +14,7 @@ use crate::{
 		idt::InterruptEntry,
 		vmem::{PageTable, BOOT_PML4_TABLE},
 	},
+	fs::{fs0, inode::Inode},
 	mem::{frame, frame::FrameAllocator, page::Page, KERNEL_VMA, PAGE_SIZE},
 };
 
@@ -51,6 +52,7 @@ impl CPU {
 pub struct Task {
 	pid: u64,
 	name: &'static str,
+	pub cwd: Inode,
 	pub rbp: usize,
 	pub rsp: usize,
 	pub rip: usize,
@@ -106,6 +108,7 @@ impl Task {
 
 		Self {
 			pid: NEXT_PID.fetch_add(1, Ordering::Relaxed),
+			cwd: fs0().root().clone(),
 			name,
 			rbp,
 			rsp,
