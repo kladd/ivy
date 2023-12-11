@@ -1,6 +1,6 @@
 use core::alloc::{GlobalAlloc, Layout};
 
-use log::{info, trace};
+use log::{info, trace, warn};
 
 use crate::sync::SpinLock;
 
@@ -36,12 +36,12 @@ unsafe impl GlobalAlloc for SpinLock<KernelAllocator> {
 
 		let ptr = if next_placement < guard.max {
 			guard.placement = next_placement;
-			guard.placement
+			placement
 		} else {
 			0
 		};
 
-		trace!("alloc(0x{ptr:016X}, {})", layout.size());
+		trace!("alloc(0x{ptr:016X}, {}[{}])", layout.size(), layout.align());
 
 		ptr as *mut u8
 	}
