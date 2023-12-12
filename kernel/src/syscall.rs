@@ -1,4 +1,4 @@
-use core::{arch::asm, fmt::Write, ptr, slice, str};
+use core::{arch::asm, cmp::min, fmt::Write, ptr, slice, str};
 
 use log::{debug, info, trace};
 
@@ -7,7 +7,7 @@ use crate::{
 		clock,
 		vmem::{PageTable, PML4},
 	},
-	devices::{serial, video::vd0, video_terminal::vdt0},
+	devices::{serial, tty::tty0},
 	mem::{frame, page::Page, PhysicalAddress, PAGE_SIZE},
 	proc::CPU,
 };
@@ -26,19 +26,22 @@ pub unsafe extern "C" fn syscall_enter(regs: &RegisterState) -> isize {
 	trace!("syscall {:03}", regs.rax);
 	match regs.rax {
 		// TODO: mmap
-		1 => sys_write(
+		1 => sys_exit(regs.rdi as isize),
+		3 => {
+			return sys_read(
+				regs.rdi as isize,
+				regs.rsi as *mut u8,
+				regs.rdx as usize,
+			) as isize
+		}
+		4 => sys_write(
 			regs.rdi as isize,
 			regs.rsi as *const u8,
 			regs.rdx as usize,
 		),
-		12 => return sys_brk(regs.rdi),
-		60 => sys_exit(regs.rdi as isize),
+		69 => return sys_brk(regs.rdi),
 		401 => uptime(),
-		402 => video_test(),
 		403 => debug_long(regs.rdi),
-		404 => video_clear(),
-		405 => return read_line(regs.rdi as *mut u8),
-		406 => print_line(regs.rdi as *const u8, regs.rsi as usize),
 		_ => trace!("unknown syscall: {}", regs.rax),
 	}
 	0
@@ -48,35 +51,28 @@ fn uptime() {
 	writeln!(serial::com1().lock(), "{}", clock::uptime_seconds()).unwrap();
 }
 
-fn video_test() {
-	vd0().test();
-}
-
 fn debug_long(long: u64) {
 	debug!("debug_long: {long:016X}");
 }
 
-fn video_clear() {
-	vdt0().clear();
-}
+fn sys_read(_fd: isize, ptr: *mut u8, len: usize) -> usize {
+	let line = tty0().lock().read_line();
 
-fn read_line(buf: *mut u8) -> isize {
-	let line = vdt0().read_line();
-	let len = line.len();
-	unsafe { ptr::copy_nonoverlapping(line.as_ptr(), buf, len) }
-	len as isize
-}
+	let mut bytes_written = 0;
+	while bytes_written < min(line.len(), len) {
+		unsafe {
+			*ptr.offset(bytes_written as isize) = line.as_bytes()[bytes_written]
+		};
+		bytes_written += 1;
+	}
 
-fn print_line(ptr: *const u8, len: usize) {
-	let slice = unsafe { slice::from_raw_parts(ptr, len) };
-	let str = str::from_utf8(slice).expect("Invalid UTF-8 string");
-	writeln!(vdt0(), "{str}").expect("VDT0 write error");
+	bytes_written
 }
 
 fn sys_write(_fd: isize, ptr: *const u8, len: usize) {
 	let slice = unsafe { slice::from_raw_parts(ptr, len) };
 	let str = str::from_utf8(slice).expect("Invalid UTF-8 string");
-	write!(serial::com1().lock(), "{str}").expect("COM1 write error");
+	write!(tty0().lock(), "{str}").expect("TTY write error");
 }
 
 fn sys_exit(status: isize) {

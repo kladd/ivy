@@ -43,10 +43,7 @@ use crate::{
 		sti,
 		vmem::{PageTable, BOOT_PML4_TABLE, PML4},
 	},
-	devices::{
-		keyboard::init_keyboard, pci::enumerate_pci, serial, video,
-		video_terminal,
-	},
+	devices::{keyboard::init_keyboard, pci::enumerate_pci, serial, tty, vga},
 	fs::{device::DeviceFileSystem, fs0},
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
@@ -86,15 +83,17 @@ pub extern "C" fn kernel_start(
 
 	debug!("kernel end {:016X}", _kernel_end as usize - KERNEL_VMA);
 
+	let kernel_page_table = PML4::adopt_boot_table().unwrap();
+	let memory_map = read_memory_map(multiboot_info);
+	identity_map_reserved(kernel_page_table, &memory_map);
+
 	init_idt();
 	init_pic();
 	init_clock();
 	init_keyboard();
 
-	let kernel_page_table = PML4::adopt_boot_table().unwrap();
-	let memory_map = read_memory_map(multiboot_info);
-	identity_map_reserved(kernel_page_table, &memory_map);
-	map_framebuffer(kernel_page_table, multiboot_info);
+	vga::init();
+	tty::init();
 
 	init_frame_allocator(&memory_map);
 
@@ -107,15 +106,6 @@ pub extern "C" fn kernel_start(
 			multiboot_info.mods_count as usize,
 		)
 	};
-
-	video::init(
-		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
-		multiboot_info.framebuffer_width as usize
-			* multiboot_info.framebuffer_height as usize,
-		PhysicalAddress(mods[1].start as usize),
-	);
-
-	video_terminal::init();
 
 	// Map initrd to load the program stored there.
 	kernel_map(
@@ -182,20 +172,6 @@ fn identity_map_reserved(
 			min(1, region.pages()),
 		);
 	}
-}
-
-fn map_framebuffer(
-	kernel_page_table: &mut PML4,
-	multiboot_info: &MultibootInfo,
-) {
-	kernel_map(
-		kernel_page_table,
-		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
-		(multiboot_info.framebuffer_bpp as usize / u8::BITS as usize
-			* multiboot_info.framebuffer_height as usize
-			* multiboot_info.framebuffer_width as usize)
-			.div_ceil(PAGE_SIZE),
-	);
 }
 
 fn init_frame_allocator(memory_map: &Vec<MultibootMmapEntry>) {

@@ -11,11 +11,13 @@ section .multiboot
 multiboot_start:
 	;; Magic (double) word.
 	dd 0x1BADB002
-	;; ALIGN | MEMINFO | VIDEO
-	dd 7
+	;; ALIGN | MEMINFO
+	dd 3
 	;; Checksum
-	dd -(7+0x1BADB002)
+	dd -(3+0x1BADB002)
 	dd 0,0,0,0,0
+
+	;; Unused
 	;; Linear framebuffer.
 	dd 0
 	;; Framebuffer width.
