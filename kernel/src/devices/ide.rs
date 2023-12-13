@@ -1,4 +1,7 @@
-use alloc::vec::Vec;
+use alloc::{alloc::alloc, boxed::Box, vec::Vec};
+use core::{alloc::Layout, cmp::min, intrinsics::size_of, ptr};
+
+use log::trace;
 
 use crate::arch::amd64::{
 	idt::{register_handler, Interrupt},
@@ -19,6 +22,7 @@ const LBA_MODE: u8 = 0xE0;
 
 const HDA: u8 = 0;
 
+// TODO: no static mut.
 static mut BUFFER: [u8; SECTOR_SIZE] = [0xFF; SECTOR_SIZE];
 
 fn lba(index: u8) -> u8 {
@@ -32,20 +36,22 @@ pub fn ide_wait() {
 	}
 }
 
-pub fn init_ide() {
+pub fn init() {
+	trace!("ide::init()");
 	register_handler(46, ide_isr);
 
 	outb(0x1F6, LBA_MODE | lba(1));
 	outb(0x1F6, LBA_MODE | lba(HDA));
 }
 
-pub fn read_sector(device: u8, sector: u32) {
+fn read_sector(device: u8, sector: u32, num_sectors: u8) {
+	trace!("ide::read_sector({device}, {sector}, {num_sectors})");
 	ide_wait();
 
 	outb(0x3F6, 0);
 	outb(0x1F6, LBA_MODE | lba(device) | (sector >> 24) as u8 & 0x0F); // 24..28 bits of LBA.
 
-	outb(0x1F2, 0x01); // Number of sectors to read.
+	outb(0x1F2, num_sectors); // Number of sectors to read.
 
 	outb(0x1F3, sector as u8); // 0..8 bits of LBA.
 	outb(0x1F4, (sector >> 8) as u8); // 8..16 bits of LBA.
@@ -56,7 +62,7 @@ pub fn read_sector(device: u8, sector: u32) {
 	ide_wait();
 }
 
-pub fn write_sector(device: u8, sector: usize, src: usize) {
+fn write_sector(device: u8, sector: usize, src: usize) {
 	ide_wait();
 
 	outb(0x3F6, 0);
@@ -74,29 +80,97 @@ pub fn write_sector(device: u8, sector: usize, src: usize) {
 	ide_wait();
 }
 
-pub fn read(offset: usize, len: usize, buf: &mut [u8]) {
+// pub fn read(device: u8, start_sector: u32, buf: &mut [u8]) {
+// 	let num_sectors = buf.len().div_ceil(SECTOR_SIZE);
+// 	let mut bytes_read = 0;
+// 	trace!(
+// 		"ide::read(dev {device}, LBA {start_sector}, len {})",
+// 		buf.len()
+// 	);
+// 	for i in 0..num_sectors {
+// 		let read_len = kdbg!(min(SECTOR_SIZE, buf.len() - bytes_read));
+//
+// 		read_sector(device, start_sector + i as u32, 1);
+// 		read_buffer(0, read_len, &mut buf[bytes_read..(bytes_read + read_len)]);
+//
+// 		bytes_read += read_len;
+// 	}
+// }
+
+pub fn read<T>(device: u8, start_sector: u32) -> Box<T> {
+	let layout = Layout::new::<T>();
+	let buf = unsafe { alloc(layout) };
+
+	let len = layout.size();
+	let num_sectors = len.div_ceil(SECTOR_SIZE);
+
+	let mut bytes_read = 0;
+	for i in 0..num_sectors {
+		let read_len = min(SECTOR_SIZE, len - bytes_read);
+
+		read_sector(device, start_sector + i as u32, 1);
+		read_bytes(0, bytes_read, read_len, buf);
+
+		bytes_read += read_len;
+	}
+
+	unsafe { Box::from_raw(buf as *mut T) }
+}
+
+pub fn read_offset<T>(
+	device: u8,
+	start_sector: u32,
+	read_offset: usize,
+) -> Box<T> {
+	assert!(read_offset < SECTOR_SIZE);
+	assert!(size_of::<T>() < SECTOR_SIZE);
+
+	let buf = unsafe { alloc(Layout::new::<T>()) };
+
+	read_sector(device, start_sector, 1);
+	read_bytes(read_offset, 0, size_of::<T>(), buf);
+
+	unsafe { Box::from_raw(buf as *mut T) }
+}
+
+fn read_bytes(
+	read_offset: usize,
+	write_offset: usize,
+	len: usize,
+	buf: *mut u8,
+) {
+	unsafe {
+		ptr::copy_nonoverlapping(
+			BUFFER.as_ptr().offset(read_offset as isize),
+			buf.offset(write_offset as isize),
+			len,
+		)
+	};
+}
+
+fn read_buffer(offset: usize, len: usize, buf: &mut [u8]) {
 	for i in 0..len {
 		buf[i] = unsafe { BUFFER[i + offset] }
 	}
 }
-
-pub unsafe fn read_offset<T: Copy>(offset: usize) -> T {
-	let offset_ptr = &BUFFER as *const [u8; 512] as usize + offset;
-	*(offset_ptr as *const T)
-}
-
-pub unsafe fn read_offset_to_vec(offset: usize, count: usize) -> Vec<u8> {
-	let src = &BUFFER as *const u8;
-	unsafe {
-		Vec::from_raw_parts(
-			src.offset(offset as isize) as *mut u8,
-			count,
-			count,
-		)
-	}
-}
+// pub unsafe fn read_offset<T: Copy>(offset: usize) -> T {
+// 	let offset_ptr = &BUFFER as *const [u8; 512] as usize + offset;
+// 	*(offset_ptr as *const T)
+// }
+//
+// pub unsafe fn read_offset_to_vec(offset: usize, count: usize) -> Vec<u8> {
+// 	let src = &BUFFER as *const u8;
+// 	unsafe {
+// 		Vec::from_raw_parts(
+// 			src.offset(offset as isize) as *mut u8,
+// 			count,
+// 			count,
+// 		)
+// 	}
+// }
 
 extern "x86-interrupt" fn ide_isr(int: Interrupt) {
+	trace!("IDE INTERRUPT: {int:#?}");
 	let buf = unsafe { &BUFFER as *const [u8; SECTOR_SIZE] as usize };
 	insl(buf, SECTOR_SIZE / 4, 0x1F0);
 	Interrupt::eoi(46);

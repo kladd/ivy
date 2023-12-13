@@ -26,9 +26,10 @@ mod proc;
 mod sync;
 mod syscall;
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{alloc::alloc, boxed::Box, vec, vec::Vec};
 use core::{
-	arch::asm, cmp::min, fmt::Write, mem::size_of, panic::PanicInfo, ptr, slice,
+	alloc::Layout, arch::asm, cmp::min, fmt::Write, mem::size_of,
+	panic::PanicInfo, ptr, slice, str,
 };
 
 use log::{debug, error};
@@ -41,15 +42,21 @@ use crate::{
 		idt::init_idt,
 		pic::init_pic,
 		sti,
-		vmem::{PageTable, BOOT_PML4_TABLE, PML4},
+		vmem::{PageTable, PML4},
 	},
-	devices::{keyboard::init_keyboard, pci::enumerate_pci, serial, tty, vga},
-	fs::{device::DeviceFileSystem, fs0},
+	devices::{
+		ide, keyboard::init_keyboard, pci::enumerate_pci, serial, tty, vga,
+	},
+	fs::{
+		device::DeviceFileSystem,
+		ext2,
+		ext2::{BlockGroupDescriptorTable, DirectoryEntry, Inode, Superblock},
+		fs0,
+	},
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
 	mem::{
-		frame, frame::FrameAllocator, kernel_map, PhysicalAddress, KERNEL_LMA,
-		KERNEL_VMA, PAGE_SIZE,
+		frame, kernel_map, PhysicalAddress, KERNEL_LMA, KERNEL_VMA, PAGE_SIZE,
 	},
 	multiboot::{MultibootInfo, MultibootMmapEntry, MultibootModuleEntry},
 	proc::{Task, CPU},
@@ -92,12 +99,18 @@ pub extern "C" fn kernel_start(
 	init_clock();
 	init_keyboard();
 
+	sti();
+
 	vga::init();
 	tty::init();
 
 	init_frame_allocator(&memory_map);
 
+	// Does nothing right now because in named cpu mode QEMU isn't populating
+	// device class fields.
 	let pci_devices = enumerate_pci();
+
+	ide::init();
 
 	// Load user program from initrd since we don't have a filesystem yet.
 	let mods: &[MultibootModuleEntry] = unsafe {
@@ -116,6 +129,36 @@ pub extern "C" fn kernel_start(
 
 	fs::init();
 	fs0().mount_root(DeviceFileSystem.root());
+
+	// let mut offset = 0;
+	// loop {
+	// 	let header = unsafe {
+	// 		&*(bytes.as_ptr().offset(offset) as *const DirectoryEntry)
+	// 	};
+	// 	if header.inode == 0 {
+	// 		break;
+	// 	}
+	// 	offset += size_of::<DirectoryEntry>() as isize;
+	// 	let name_len = header.name_len;
+	//
+	// 	let name_s = unsafe {
+	// 		slice::from_raw_parts(
+	// 			bytes.as_ptr().offset(offset),
+	// 			name_len as usize,
+	// 		)
+	// 	};
+	// 	let name = unsafe { str::from_utf8_unchecked(name_s) };
+	// 	offset += name_len as isize;
+	// 	offset += 4 - (name_len as isize % 4);
+	// 	debug!("{header:#X?} \"{name}\"");
+	// }
+	let rootfs = ext2::FileSystem::new(0);
+	let root_inode = rootfs.root();
+	debug!("{rootfs:#?}\n{root_inode:#X?}");
+
+	loop {
+		hlt();
+	}
 
 	// First user process.
 	let mut task = Task::new("user");
