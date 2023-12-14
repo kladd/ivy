@@ -127,36 +127,6 @@ pub extern "C" fn kernel_start(
 	fs0().mount_root(Inode::Ext2(rootfs.root()));
 	fs0().mount("/dev", DeviceFileSystem.root());
 
-	// let mut offset = 0;
-	// loop {
-	// 	let header = unsafe {
-	// 		&*(bytes.as_ptr().offset(offset) as *const DirectoryEntry)
-	// 	};
-	// 	if header.inode == 0 {
-	// 		break;
-	// 	}
-	// 	offset += size_of::<DirectoryEntry>() as isize;
-	// 	let name_len = header.name_len;
-	//
-	// 	let name_s = unsafe {
-	// 		slice::from_raw_parts(
-	// 			bytes.as_ptr().offset(offset),
-	// 			name_len as usize,
-	// 		)
-	// 	};
-	// 	let name = unsafe { str::from_utf8_unchecked(name_s) };
-	// 	offset += name_len as isize;
-	// 	offset += 4 - (name_len as isize % 4);
-	// 	debug!("{header:#X?} \"{name}\"");
-	// }
-	// let rootfs = ext2::FileSystem::new(0);
-	// let root_inode = rootfs.root();
-	// debug!("{rootfs:#?}\n{root_inode:#X?}");
-	//
-	// loop {
-	// 	hlt();
-	// }
-
 	// First user process.
 	let mut task = Task::new("user");
 

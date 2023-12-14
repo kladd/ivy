@@ -7,8 +7,7 @@ use core::{
 	sync::atomic::{AtomicU64, Ordering},
 };
 
-use libc::api::open;
-use log::{debug, warn};
+use log::debug;
 
 use crate::{
 	arch::amd64::{
@@ -119,7 +118,7 @@ impl Task {
 
 		Self {
 			pid: NEXT_PID.fetch_add(1, Ordering::Relaxed),
-			cwd: fs0().root().clone(),
+			cwd: fs0().find(&fs0().root(), "/home/default").unwrap(),
 			open_files,
 			name,
 			rbp,

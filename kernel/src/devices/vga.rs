@@ -59,7 +59,6 @@ impl VideoMemory {
 
 	fn write_byte_visible(&mut self, b: u8) {
 		let pos = self.pos();
-		trace!("pos: {pos}");
 		unsafe {
 			*self.addr.offset(self.pos() as isize) = to_cell(b, FG, BG);
 		}
@@ -159,7 +158,6 @@ impl VideoMemory {
 		let next_col = self.col + 1;
 		self.row += next_col / COLS;
 		self.col = next_col % COLS;
-		trace!("[line: {}, col: {}]", self.row, self.col);
 	}
 
 	fn write_offset(&mut self, offset: isize, val: u16) {

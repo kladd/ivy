@@ -4,7 +4,7 @@ use alloc::{
 	sync::Arc,
 	vec::Vec,
 };
-use core::{intrinsics::size_of, slice, str};
+use core::{cmp::min, intrinsics::size_of, slice, str};
 
 use log::{debug, trace};
 
@@ -233,7 +233,10 @@ impl Inode {
 	}
 
 	pub fn read(&self, offset: usize, dst: *mut u8, len: usize) -> usize {
+		assert!(!self.is_dir());
 		assert!(offset < 4096, "TODO: read multiple blocks");
+
+		let len = min(self.md.i_size as usize, len);
 		ide::read(
 			self.fs.device,
 			self.fs.block_to_sector(self.md.i_block[0]),

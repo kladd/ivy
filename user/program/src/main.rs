@@ -12,6 +12,7 @@ use core::{
 use libc::{
 	api::{STDIN_FILENO, STDOUT_FILENO},
 	dirent::{opendir, readdir},
+	fcntl::open,
 	syscall,
 	unistd::{chdir, read, write},
 };
@@ -37,9 +38,30 @@ fn shell() {
 			Some("exit") => break,
 			Some("uptime") => uptime(),
 			Some("cd") => cd(tokens.next()),
+			Some("cat") => cat(tokens.next()),
 			_ => continue,
 		}
 	}
+}
+
+fn cat(path: Option<&str>) {
+	let Some(path) = path else { return };
+	let file = open(CString::new(path).unwrap().as_ptr(), 0);
+	if file < 0 {
+		return;
+	}
+	let mut buf = [0u8; 128];
+	let len = read(file, buf.as_mut_ptr() as *mut c_void, 128);
+
+	let contents = unsafe {
+		let slice = slice::from_raw_parts(buf.as_ptr(), len as usize);
+		str::from_utf8_unchecked(slice)
+	};
+	write(
+		STDOUT_FILENO,
+		contents.as_ptr() as *const c_void,
+		contents.len(),
+	);
 }
 
 fn cd(path: Option<&str>) {
