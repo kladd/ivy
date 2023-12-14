@@ -6,6 +6,7 @@ pub mod inode;
 use alloc::vec::Vec;
 
 pub use file_descriptor::FileDescriptor;
+use log::debug;
 
 use crate::{
 	fs::inode::{Inode, InodeHash},

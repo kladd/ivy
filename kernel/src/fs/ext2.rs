@@ -199,7 +199,6 @@ impl Inode {
 			let header = unsafe {
 				&*(ptr.offset(offset) as *const DirectoryEntryHeader)
 			};
-			debug!("header {header:#X?}");
 
 			if header.inode == 0 {
 				break;

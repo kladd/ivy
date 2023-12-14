@@ -56,7 +56,7 @@ impl DeviceInode {
 	pub fn name(&self) -> String {
 		match self {
 			Self::Root => String::from("/"),
-			node => format!("{node}").to_ascii_uppercase(),
+			node => format!("{node}").to_ascii_lowercase(),
 		}
 	}
 

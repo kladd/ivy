@@ -1,7 +1,5 @@
 use core::{cmp::min, ffi::c_char, fmt::Write, ptr, slice, str};
 
-use log::trace;
-
 use crate::fs::inode::Inode;
 
 #[derive(Debug)]
@@ -47,10 +45,16 @@ impl FileDescriptor {
 					}
 				});
 			}
-			Inode::Device(_) => todo!(),
+			Inode::Device(inode) => {
+				inode.readdir().get(self.offset).map(|devnode| {
+					dirent.d_ino = 1;
+					for (i, c) in devnode.name().bytes().enumerate() {
+						dirent.d_name[i] = c as c_char;
+					}
+				});
+			}
 		}
 
-		trace!("readdir({dirent:?}");
 		self.offset += 1;
 	}
 
