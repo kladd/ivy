@@ -1,5 +1,4 @@
-use alloc::{alloc::alloc, string::String};
-use core::{alloc::Layout, arch::asm, intrinsics::unreachable, slice};
+use core::{arch::asm, intrinsics::unreachable};
 
 #[inline]
 fn syscall(number: u64) -> u64 {
@@ -72,20 +71,24 @@ pub fn exit(status: isize) -> ! {
 	unsafe { unreachable() };
 }
 
-pub fn debug_long(long: u64) {
-	syscall1(403, long);
+pub fn open(path: *const u8, len: usize) -> isize {
+	syscall2(3, path as u64, len as u64) as isize
+}
+
+pub fn stat(fd: isize) {
+	syscall1(4, fd as u64);
 }
 
 pub fn write(_fd: u64, buf: *const u8, len: usize) {
-	syscall3(4, _fd, buf as u64, len as u64);
+	syscall3(6, _fd, buf as u64, len as u64);
 }
 
 pub fn read(_fd: u64, buf: *mut u8, len: usize) -> usize {
-	syscall3(3, _fd, buf as u64, len as u64) as usize
+	syscall3(5, _fd, buf as u64, len as u64) as usize
 }
 
 /// Currently brk() is only capable of returning the current break (addr = 0) or
 /// incrementing the break by one page (addr != 0).
 pub fn brk(addr: usize) -> usize {
-	syscall1(69, addr as u64) as usize
+	syscall1(2, addr as u64) as usize
 }

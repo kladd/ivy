@@ -37,6 +37,7 @@ impl<T> StaticPtr<T> {
 	}
 }
 
+// TODO: make T Sync.
 unsafe impl<T> Sync for StaticPtr<T> {}
 
 impl<T: Sync> InitOnce<T> {

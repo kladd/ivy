@@ -1,51 +1,48 @@
 use alloc::string::String;
 use core::mem;
 
-use crate::fs::device::inode::DeviceInode;
+use crate::fs::{device::inode::DeviceInode, ext2};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum Inode {
 	Device(DeviceInode),
+	Ext2(ext2::Inode),
 }
 
 #[derive(PartialEq, Debug)]
 pub enum InodeHash {
 	Device(mem::Discriminant<DeviceInode>),
+	Ext2(u32),
 }
 
-// TODO: When this API is stable, make the Inode subtypes implement a trait so
-//       we're not switching on this enum all the time. Not that it's that bad.
 impl Inode {
 	pub fn lookup(&self, name: &str) -> Option<Self> {
 		match self {
 			Self::Device(node) => Some(node.lookup(name)?),
+			Inode::Ext2(inode) => Some(Inode::Ext2(inode.lookup(name)?)),
 		}
 	}
 
 	pub fn hash(&self) -> InodeHash {
 		match self {
 			Self::Device(node) => node.hash(),
+			Inode::Ext2(inode) => InodeHash::Ext2(inode.hash()),
 		}
 	}
 }
 
-// TODO: `stat`
 impl Inode {
 	pub fn name(&self) -> String {
 		match self {
 			Inode::Device(inode) => inode.name(),
-		}
-	}
-
-	pub fn size(&self) -> usize {
-		match self {
-			Inode::Device(inode) => inode.size(),
+			Inode::Ext2(inode) => inode.name(),
 		}
 	}
 
 	pub fn is_dir(&self) -> bool {
 		match self {
 			Inode::Device(inode) => inode.is_dir(),
+			Inode::Ext2(inode) => inode.is_dir(),
 		}
 	}
 }

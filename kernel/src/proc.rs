@@ -1,4 +1,4 @@
-use alloc::{alloc::alloc_zeroed, boxed::Box};
+use alloc::{alloc::alloc_zeroed, boxed::Box, vec::Vec};
 use core::{
 	alloc::Layout,
 	arch::asm,
@@ -14,8 +14,9 @@ use crate::{
 		idt::InterruptEntry,
 		vmem::{PageTable, BOOT_PML4_TABLE},
 	},
+	fs,
 	fs::{fs0, inode::Inode},
-	mem::{frame, frame::FrameAllocator, page::Page, KERNEL_VMA, PAGE_SIZE},
+	mem::{frame, page::Page, KERNEL_VMA, PAGE_SIZE},
 };
 
 static NEXT_PID: AtomicU64 = AtomicU64::new(0);
@@ -52,6 +53,7 @@ impl CPU {
 pub struct Task {
 	pid: u64,
 	name: &'static str,
+	pub open_files: Vec<fs::FileDescriptor>,
 	pub cwd: Inode,
 	pub rbp: usize,
 	pub rsp: usize,
@@ -109,11 +111,18 @@ impl Task {
 		Self {
 			pid: NEXT_PID.fetch_add(1, Ordering::Relaxed),
 			cwd: fs0().root().clone(),
+			open_files: Vec::with_capacity(4),
 			name,
 			rbp,
 			rsp,
 			rip: Self::START_ADDR,
 			cr3: cr3 - KERNEL_VMA, // to physical
 		}
+	}
+}
+
+impl Drop for Task {
+	fn drop(&mut self) {
+		panic!("you dropped a task and didn't mean to");
 	}
 }

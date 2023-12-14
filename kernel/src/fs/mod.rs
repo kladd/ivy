@@ -1,17 +1,16 @@
-use core::mem::MaybeUninit;
-
-use crate::{
-	fs::{
-		file_descriptor::FileDescriptor,
-		inode::{Inode, InodeHash},
-	},
-	sync::StaticPtr,
-};
-
 pub mod device;
 pub mod ext2;
 pub mod file_descriptor;
 pub mod inode;
+
+use alloc::vec::Vec;
+
+pub use file_descriptor::FileDescriptor;
+
+use crate::{
+	fs::inode::{Inode, InodeHash},
+	sync::StaticPtr,
+};
 
 #[derive(Debug)]
 pub struct MountPoint {
@@ -21,22 +20,22 @@ pub struct MountPoint {
 
 #[derive(Debug)]
 pub struct FileSystem {
-	n_mounts: usize,
-	mounts: [MaybeUninit<MountPoint>; 4],
+	mounts: Vec<MountPoint>,
 }
 
 impl FileSystem {
 	pub fn root(&self) -> &Inode {
-		unsafe { &self.mounts[0].assume_init_ref().guest_root_inode }
-	}
-
-	// TODO: Result, not option.
-	pub fn open(&self, base: &Inode, path: &str) -> Option<FileDescriptor> {
-		self.find(base, path).map(FileDescriptor::from)
+		&self
+			.mounts
+			.get(0)
+			.expect("no root mounted")
+			.guest_root_inode
 	}
 
 	pub fn mount_root(&mut self, root: Inode) {
-		assert_eq!(self.n_mounts, 0, "Root filesystem already mounted");
+		if !self.mounts.is_empty() {
+			panic!("Root filesystem already mounted");
+		}
 		self.mount_inode(None, root);
 	}
 
@@ -80,21 +79,14 @@ impl FileSystem {
 
 impl FileSystem {
 	fn mount_inode(&mut self, host_inode: Option<Inode>, guest_root: Inode) {
-		if self.n_mounts >= 4 {
-			panic!("Too many filesystems mounted");
-		}
-		self.mounts[self.n_mounts] = MaybeUninit::new(MountPoint {
+		self.mounts.push(MountPoint {
 			host_inode_hash: host_inode.map(|inode| inode.hash()),
 			guest_root_inode: guest_root,
-		});
-		self.n_mounts += 1;
+		})
 	}
 
 	fn mount_point(&self, node: &Inode) -> Option<Inode> {
-		for i in 0..self.n_mounts {
-			// Safety: n_mounts must represent the number of contiguously
-			//         initialized mounts.
-			let mp = unsafe { self.mounts[i].assume_init_ref() };
+		for mp in &self.mounts {
 			match mp.host_inode_hash {
 				Some(ref hash) if *hash == node.hash() => {
 					return Some(mp.guest_root_inode.clone())
@@ -110,8 +102,7 @@ static FS: StaticPtr<FileSystem> = StaticPtr::new();
 
 pub fn init() {
 	FS.init(FileSystem {
-		n_mounts: 0,
-		mounts: unsafe { MaybeUninit::uninit().assume_init() },
+		mounts: Vec::with_capacity(4),
 	})
 }
 

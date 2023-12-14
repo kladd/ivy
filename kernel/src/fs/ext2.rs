@@ -1,10 +1,11 @@
-use alloc::boxed::Box;
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::intrinsics::size_of;
 
-use log::debug;
+use log::{debug, trace};
 
 use crate::devices::ide;
 
-const ROOT_INODE: usize = 2;
+const ROOT_INODE: u32 = 2;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -52,8 +53,8 @@ pub struct BlockGroupDescriptorTable {
 }
 
 #[repr(C)]
-#[derive(Debug)]
-pub struct Inode {
+#[derive(Debug, Clone)]
+pub struct InodeMetadata {
 	i_mode: u16,
 	i_uid: u16,
 	i_size: u32,
@@ -74,13 +75,26 @@ pub struct Inode {
 	i_osd2: [u32; 3],
 }
 
+#[derive(Debug, Clone)]
+pub struct Inode {
+	md: InodeMetadata,
+	fs: Arc<FileSystem>,
+	name: String,
+	inumber: u32,
+}
+
 #[repr(C)]
-#[derive(Debug)]
-pub struct DirectoryEntry {
+#[derive(Debug, Clone)]
+struct DirectoryEntryHeader {
 	pub inode: u32,
 	rec_len: u16,
 	pub name_len: u8,
 	file_type: u8,
+}
+
+pub struct DirectoryEntry {
+	header: DirectoryEntryHeader,
+	name: String,
 }
 
 #[derive(Debug)]
@@ -95,62 +109,138 @@ impl FileSystem {
 		Self { device, superblock }
 	}
 
-	pub fn root(&self) -> Box<Inode> {
-		self.inode(ROOT_INODE)
+	pub fn root(self: &Arc<Self>) -> Inode {
+		Inode {
+			md: self.inode(ROOT_INODE),
+			fs: Arc::clone(self),
+			name: String::from("/"),
+			inumber: ROOT_INODE,
+		}
 	}
 
-	pub fn inode(&self, inode: usize) -> Box<Inode> {
+	pub fn inode(&self, inode: u32) -> InodeMetadata {
 		let bgdt = self.block_group_descriptor(self.block_group(inode));
 
-		let inode_table_sector =
-			self.block_to_sector(bgdt.bg_inode_table as usize);
+		let inode_table_sector = self.block_to_sector(bgdt.bg_inode_table);
 		let inode_table_index = self.inode_index(inode);
-		let inode_sector = ((self.superblock.s_inode_size as usize
+		let inode_sector = ((self.superblock.s_inode_size as u32
 			* inode_table_index)
-			/ ide::SECTOR_SIZE)
+			/ ide::SECTOR_SIZE as u32)
 			+ inode_table_sector;
-		let inode_sector_offset = (self.superblock.s_inode_size as usize
+		let inode_sector_offset = (self.superblock.s_inode_size as u32
 			* inode_table_index)
-			% ide::SECTOR_SIZE;
+			% ide::SECTOR_SIZE as u32;
 
 		assert!((self.superblock.s_inode_size as usize) < ide::SECTOR_SIZE);
 
-		ide::read_offset(self.device, inode_sector as u32, inode_sector_offset)
+		*ide::read_offset::<InodeMetadata>(
+			self.device,
+			inode_sector as u32,
+			inode_sector_offset as usize,
+		)
+		.clone()
 	}
 
 	fn block_group_descriptor(
 		&self,
-		block_group: usize,
+		block_group: u32,
 	) -> Box<BlockGroupDescriptorTable> {
 		let descriptor_block =
-			block_group * self.superblock.s_blocks_per_group as usize + 1;
-		ide::read(
-			self.device,
-			self.block_sector_start(descriptor_block) as u32,
-		)
+			block_group * self.superblock.s_blocks_per_group + 1;
+		ide::read(self.device, self.block_to_sector(descriptor_block))
 	}
 
 	fn block_size(&self) -> usize {
 		1024 << self.superblock.s_log_block_size as usize
 	}
 
-	fn block_group(&self, inode: usize) -> usize {
-		(inode - 1) / self.superblock.s_inodes_per_group as usize
+	fn block_group(&self, inode: u32) -> u32 {
+		(inode - 1) / self.superblock.s_inodes_per_group
 	}
 
-	fn inode_index(&self, inode: usize) -> usize {
-		(inode - 1) % self.superblock.s_inodes_per_group as usize
+	fn inode_index(&self, inode: u32) -> u32 {
+		(inode - 1) % self.superblock.s_inodes_per_group
 	}
 
-	fn block_to_sector(&self, block: usize) -> usize {
-		block * self.block_size() / ide::SECTOR_SIZE
-	}
-
-	fn block_sector_start(&self, block: usize) -> usize {
-		block * self.block_sector_count()
+	fn block_to_sector(&self, block: u32) -> u32 {
+		block * self.block_sector_count() as u32
 	}
 
 	fn block_sector_count(&self) -> usize {
 		self.block_size() / ide::SECTOR_SIZE
+	}
+}
+
+impl Inode {
+	pub fn is_dir(&self) -> bool {
+		self.md.i_mode & 0x4000 != 0
+	}
+
+	pub fn readdir(&self) -> Vec<DirectoryEntry> {
+		assert!(self.is_dir());
+
+		let mut entries = Vec::new();
+
+		let mut dirs = ide::read_sector_bytes(
+			self.fs.device,
+			self.fs.block_to_sector(self.md.i_block[0]),
+		);
+
+		let len = dirs.len();
+		let ptr = dirs.as_mut_ptr();
+
+		let mut offset = 0isize;
+		while offset < len as isize {
+			let header = unsafe {
+				&*(ptr.offset(offset) as *const DirectoryEntryHeader)
+			};
+
+			if header.inode == 0 {
+				break;
+			}
+
+			offset += size_of::<DirectoryEntryHeader>() as isize;
+
+			let name_len = header.name_len;
+
+			entries.push(DirectoryEntry {
+				header: header.clone(),
+				name: unsafe {
+					String::from_raw_parts(
+						ptr.offset(offset),
+						name_len as usize,
+						name_len as usize,
+					)
+				},
+			});
+
+			offset += name_len as isize;
+			offset += 4 - (name_len as isize % 4);
+		}
+
+		entries
+	}
+
+	pub fn lookup(&self, name: &str) -> Option<Inode> {
+		let dirent = self
+			.readdir()
+			.into_iter()
+			.find(|dirent| dirent.name == name)?;
+		let inode_md = self.fs.inode(dirent.header.inode);
+
+		Some(Inode {
+			md: inode_md,
+			fs: self.fs.clone(),
+			name: dirent.name,
+			inumber: dirent.header.inode,
+		})
+	}
+
+	pub fn hash(&self) -> u32 {
+		self.inumber
+	}
+
+	pub fn name(&self) -> String {
+		self.name.clone()
 	}
 }

@@ -6,14 +6,20 @@ extern crate alloc;
 use alloc::alloc::alloc;
 use core::{alloc::Layout, slice, str};
 
-use sys::syscall::{brk, debug_long, read, write};
+use sys::syscall::{open, read, stat, write};
 
 #[no_mangle]
 fn main(_argc: isize, _argv: *const *const u8) -> isize {
-	let current_break = brk(0);
-	debug_long(current_break as u64);
-
 	let buf = unsafe { alloc(Layout::array::<u8>(80).unwrap()) };
+
+	let tty = "/dev/tty0";
+	let fd = open(tty.as_ptr(), tty.len());
+
+	if fd < 0 {
+		return fd;
+	}
+	stat(fd);
+
 	loop {
 		let len = read(0, buf, 80);
 		let line = unsafe {

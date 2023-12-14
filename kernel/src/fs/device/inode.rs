@@ -4,8 +4,6 @@ use core::{
 	mem,
 };
 
-use log::warn;
-
 use crate::{
 	devices::{serial::com1, tty::tty0},
 	fs::inode::{Inode, InodeHash},
@@ -21,7 +19,7 @@ pub enum DeviceInode {
 impl DeviceInode {
 	pub fn lookup(&self, name: &str) -> Option<Inode> {
 		match name {
-			"vdt0" => Some(Inode::Device(DeviceInode::Console)),
+			"tty0" => Some(Inode::Device(DeviceInode::Console)),
 			"com1" => Some(Inode::Device(DeviceInode::Serial)),
 			_ => None,
 		}

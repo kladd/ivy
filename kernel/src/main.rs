@@ -26,10 +26,10 @@ mod proc;
 mod sync;
 mod syscall;
 
-use alloc::{alloc::alloc, boxed::Box, vec, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::{
-	alloc::Layout, arch::asm, cmp::min, fmt::Write, mem::size_of,
-	panic::PanicInfo, ptr, slice, str,
+	arch::asm, cmp::min, fmt::Write, mem::size_of, panic::PanicInfo, ptr,
+	slice, str,
 };
 
 use log::{debug, error};
@@ -47,12 +47,7 @@ use crate::{
 	devices::{
 		ide, keyboard::init_keyboard, pci::enumerate_pci, serial, tty, vga,
 	},
-	fs::{
-		device::DeviceFileSystem,
-		ext2,
-		ext2::{BlockGroupDescriptorTable, DirectoryEntry, Inode, Superblock},
-		fs0,
-	},
+	fs::{device::DeviceFileSystem, ext2, fs0, inode::Inode},
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
 	mem::{
@@ -128,7 +123,9 @@ pub extern "C" fn kernel_start(
 	);
 
 	fs::init();
-	fs0().mount_root(DeviceFileSystem.root());
+	let rootfs = Arc::new(ext2::FileSystem::new(0));
+	fs0().mount_root(Inode::Ext2(rootfs.root()));
+	fs0().mount("/dev", DeviceFileSystem.root());
 
 	// let mut offset = 0;
 	// loop {
@@ -152,13 +149,13 @@ pub extern "C" fn kernel_start(
 	// 	offset += 4 - (name_len as isize % 4);
 	// 	debug!("{header:#X?} \"{name}\"");
 	// }
-	let rootfs = ext2::FileSystem::new(0);
-	let root_inode = rootfs.root();
-	debug!("{rootfs:#?}\n{root_inode:#X?}");
-
-	loop {
-		hlt();
-	}
+	// let rootfs = ext2::FileSystem::new(0);
+	// let root_inode = rootfs.root();
+	// debug!("{rootfs:#?}\n{root_inode:#X?}");
+	//
+	// loop {
+	// 	hlt();
+	// }
 
 	// First user process.
 	let mut task = Task::new("user");

@@ -1,10 +1,6 @@
 use core::alloc::{GlobalAlloc, Layout};
 
-use crate::{
-	sync::SpinLock,
-	syscall::{brk, debug_long},
-	PAGE_SIZE,
-};
+use crate::{sync::SpinLock, syscall::brk, PAGE_SIZE};
 
 pub struct Allocator {
 	placement: usize,
@@ -41,12 +37,8 @@ unsafe impl GlobalAlloc for SpinLock<Allocator> {
 			0
 		};
 
-		// trace!("alloc(0x{ptr:016X}, {})", layout.size());
-
 		ptr as *mut u8
 	}
 
-	unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-		// trace!("leak(0x{ptr:016X?}, {})", layout.size());
-	}
+	unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
 }

@@ -1,4 +1,4 @@
-use alloc::{alloc::alloc, boxed::Box, vec::Vec};
+use alloc::{alloc::alloc, boxed::Box, vec, vec::Vec};
 use core::{alloc::Layout, cmp::min, intrinsics::size_of, ptr};
 
 use log::trace;
@@ -115,6 +115,13 @@ pub fn read<T>(device: u8, start_sector: u32) -> Box<T> {
 	}
 
 	unsafe { Box::from_raw(buf as *mut T) }
+}
+
+pub fn read_sector_bytes(device: u8, start_sector: u32) -> Vec<u8> {
+	let mut result = vec![0; 512];
+	read_sector(device, start_sector, 1);
+	read_bytes(0, 0, result.len(), result.as_mut_ptr());
+	result
 }
 
 pub fn read_offset<T>(

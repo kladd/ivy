@@ -8,6 +8,7 @@ use crate::{
 		vmem::{PageTable, PML4},
 	},
 	devices::{serial, tty::tty0},
+	fs::{fs0, FileDescriptor},
 	mem::{frame, page::Page, PhysicalAddress, PAGE_SIZE},
 	proc::CPU,
 };
@@ -25,16 +26,18 @@ pub struct RegisterState {
 pub unsafe extern "C" fn syscall_enter(regs: &RegisterState) -> isize {
 	trace!("syscall {:03}", regs.rax);
 	match regs.rax {
-		// TODO: mmap
 		1 => sys_exit(regs.rdi as isize),
-		3 => {
+		2 => return sys_brk(regs.rdi),
+		3 => return sys_open(regs.rdi as *const u8, regs.rsi as usize),
+		4 => sys_stat(regs.rdi as usize),
+		5 => {
 			return sys_read(
 				regs.rdi as isize,
 				regs.rsi as *mut u8,
 				regs.rdx as usize,
 			) as isize
 		}
-		4 => sys_write(
+		6 => sys_write(
 			regs.rdi as isize,
 			regs.rsi as *const u8,
 			regs.rdx as usize,
@@ -73,6 +76,30 @@ fn sys_write(_fd: isize, ptr: *const u8, len: usize) {
 	let slice = unsafe { slice::from_raw_parts(ptr, len) };
 	let str = str::from_utf8(slice).expect("Invalid UTF-8 string");
 	write!(tty0().lock(), "{str}").expect("TTY write error");
+}
+
+fn sys_open(path: *const u8, len: usize) -> isize {
+	trace!("sys_open({path:?}, {len})");
+
+	let slice = unsafe { slice::from_raw_parts(path, len) };
+	let fname = str::from_utf8(slice).expect("Invalid UTF-8 string");
+
+	let cpu = CPU::load();
+	let task = unsafe { &mut *cpu.task };
+
+	let Some(inode) = fs0().find(&task.cwd, fname) else {
+		return -1;
+	};
+	let fdesc = FileDescriptor::new(inode);
+	task.open_files.push(fdesc);
+
+	return task.open_files.len() as isize - 1;
+}
+
+fn sys_stat(fd: usize) {
+	let cpu = CPU::load();
+	let task = unsafe { &mut *cpu.task };
+	debug!("{:#X?}", task.open_files.get(fd));
 }
 
 fn sys_exit(status: isize) {
