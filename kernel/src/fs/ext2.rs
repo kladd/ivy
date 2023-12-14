@@ -216,10 +216,13 @@ impl Inode {
 				.unwrap()
 			};
 
-			entries.push(DirectoryEntry {
-				header: header.clone(),
-				name: name.to_string(),
-			});
+			// Don't add '.' and '..' entries for root.
+			if self.inumber != 2 || (name != "." && name != "..") {
+				entries.push(DirectoryEntry {
+					header: header.clone(),
+					name: name.to_string(),
+				});
+			}
 
 			offset += name_len as isize;
 			if name_len % 4 != 0 {

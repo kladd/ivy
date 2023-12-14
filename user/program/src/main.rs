@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::{ffi::CString, format, string::ToString};
+use alloc::{ffi::CString, format};
 use core::{
 	ffi::{c_void, CStr},
 	slice, str,
