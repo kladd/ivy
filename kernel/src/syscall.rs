@@ -1,5 +1,6 @@
 use core::{arch::asm, cmp::min, fmt::Write, ptr, slice, str};
 
+use libc::api;
 use log::{debug, info, trace};
 
 use crate::{
@@ -35,13 +36,18 @@ pub unsafe extern "C" fn syscall_enter(regs: &RegisterState) -> isize {
 				regs.rdi as isize,
 				regs.rsi as *mut u8,
 				regs.rdx as usize,
-			) as isize
+			)
 		}
-		6 => sys_write(
-			regs.rdi as isize,
-			regs.rsi as *const u8,
-			regs.rdx as usize,
-		),
+		6 => {
+			return sys_write(
+				regs.rdi as isize,
+				regs.rsi as *const u8,
+				regs.rdx as usize,
+			)
+		}
+		7 => {
+			return sys_readdir(regs.rdi as isize, regs.rsi as *mut api::dirent)
+		}
 		69 => return sys_brk(regs.rdi),
 		401 => uptime(),
 		403 => debug_long(regs.rdi),
@@ -58,24 +64,33 @@ fn debug_long(long: u64) {
 	debug!("debug_long: {long:016X}");
 }
 
-fn sys_read(_fd: isize, ptr: *mut u8, len: usize) -> usize {
-	let line = tty0().lock().read_line();
+fn sys_read(fd: isize, ptr: *mut u8, len: usize) -> isize {
+	let cpu = CPU::load();
+	let task = unsafe { &mut *cpu.task };
+	let Some(fd) = task.open_files.get_mut(0) else {
+		return -1;
+	};
 
-	let mut bytes_written = 0;
-	while bytes_written < min(line.len(), len) {
-		unsafe {
-			*ptr.offset(bytes_written as isize) = line.as_bytes()[bytes_written]
-		};
-		bytes_written += 1;
-	}
-
-	bytes_written
+	fd.read(ptr, len) as isize
 }
 
-fn sys_write(_fd: isize, ptr: *const u8, len: usize) {
-	let slice = unsafe { slice::from_raw_parts(ptr, len) };
-	let str = str::from_utf8(slice).expect("Invalid UTF-8 string");
-	write!(tty0().lock(), "{str}").expect("TTY write error");
+fn sys_readdir(fd: isize, ptr: *mut api::dirent) -> isize {
+	let cpu = CPU::load();
+	let task = unsafe { &mut *cpu.task };
+	let Some(fildes) = task.open_files.get_mut(fd as usize) else {
+		return -1;
+	};
+	fildes.readdir(ptr);
+	0
+}
+
+fn sys_write(_fd: isize, ptr: *const u8, len: usize) -> isize {
+	let cpu = CPU::load();
+	let task = unsafe { &mut *cpu.task };
+	let Some(fd) = task.open_files.get_mut(0) else {
+		return -1;
+	};
+	fd.write(ptr, len) as isize
 }
 
 fn sys_open(path: *const u8, len: usize) -> isize {
@@ -93,7 +108,7 @@ fn sys_open(path: *const u8, len: usize) -> isize {
 	let fdesc = FileDescriptor::new(inode);
 	task.open_files.push(fdesc);
 
-	return task.open_files.len() as isize - 1;
+	return kdbg!(task.open_files.len() as isize - 1);
 }
 
 fn sys_stat(fd: usize) {

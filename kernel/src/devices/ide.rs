@@ -80,24 +80,31 @@ fn write_sector(device: u8, sector: usize, src: usize) {
 	ide_wait();
 }
 
-// pub fn read(device: u8, start_sector: u32, buf: &mut [u8]) {
-// 	let num_sectors = buf.len().div_ceil(SECTOR_SIZE);
-// 	let mut bytes_read = 0;
-// 	trace!(
-// 		"ide::read(dev {device}, LBA {start_sector}, len {})",
-// 		buf.len()
-// 	);
-// 	for i in 0..num_sectors {
-// 		let read_len = kdbg!(min(SECTOR_SIZE, buf.len() - bytes_read));
-//
-// 		read_sector(device, start_sector + i as u32, 1);
-// 		read_buffer(0, read_len, &mut buf[bytes_read..(bytes_read + read_len)]);
-//
-// 		bytes_read += read_len;
-// 	}
-// }
+pub fn read(
+	device: u8,
+	start_sector: u32,
+	read_offset: usize,
+	dst: *mut u8,
+	len: usize,
+) {
+	let num_sectors = len.div_ceil(SECTOR_SIZE);
+	let start_sector = start_sector + (read_offset as u32 / SECTOR_SIZE as u32);
+	let read_offset = read_offset % SECTOR_SIZE;
 
-pub fn read<T>(device: u8, start_sector: u32) -> Box<T> {
+	let mut bytes_read = 0;
+	let read_len = min(SECTOR_SIZE - read_offset, len - bytes_read);
+
+	read_sector(device, start_sector, 1);
+	read_bytes(read_offset, bytes_read, read_len, dst);
+
+	bytes_read += read_len;
+
+	for i in 1..num_sectors {
+		todo!()
+	}
+}
+
+pub fn read_type<T>(device: u8, start_sector: u32) -> Box<T> {
 	let layout = Layout::new::<T>();
 	let buf = unsafe { alloc(layout) };
 

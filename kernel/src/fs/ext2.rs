@@ -1,5 +1,10 @@
-use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
-use core::intrinsics::size_of;
+use alloc::{
+	boxed::Box,
+	string::{String, ToString},
+	sync::Arc,
+	vec::Vec,
+};
+use core::{intrinsics::size_of, slice, str};
 
 use log::{debug, trace};
 
@@ -85,7 +90,7 @@ pub struct Inode {
 
 #[repr(C)]
 #[derive(Debug, Clone)]
-struct DirectoryEntryHeader {
+pub struct DirectoryEntryHeader {
 	pub inode: u32,
 	rec_len: u16,
 	pub name_len: u8,
@@ -93,8 +98,8 @@ struct DirectoryEntryHeader {
 }
 
 pub struct DirectoryEntry {
-	header: DirectoryEntryHeader,
-	name: String,
+	pub header: DirectoryEntryHeader,
+	pub name: String,
 }
 
 #[derive(Debug)]
@@ -105,7 +110,7 @@ pub struct FileSystem {
 
 impl FileSystem {
 	pub fn new(device: u8) -> Self {
-		let superblock = ide::read(device, 2);
+		let superblock = ide::read_type(device, 2);
 		Self { device, superblock }
 	}
 
@@ -147,7 +152,7 @@ impl FileSystem {
 	) -> Box<BlockGroupDescriptorTable> {
 		let descriptor_block =
 			block_group * self.superblock.s_blocks_per_group + 1;
-		ide::read(self.device, self.block_to_sector(descriptor_block))
+		ide::read_type(self.device, self.block_to_sector(descriptor_block))
 	}
 
 	fn block_size(&self) -> usize {
@@ -194,6 +199,7 @@ impl Inode {
 			let header = unsafe {
 				&*(ptr.offset(offset) as *const DirectoryEntryHeader)
 			};
+			debug!("header {header:#X?}");
 
 			if header.inode == 0 {
 				break;
@@ -202,23 +208,38 @@ impl Inode {
 			offset += size_of::<DirectoryEntryHeader>() as isize;
 
 			let name_len = header.name_len;
+			let name = unsafe {
+				str::from_utf8(slice::from_raw_parts(
+					ptr.offset(offset),
+					name_len as usize,
+				))
+				.unwrap()
+			};
 
 			entries.push(DirectoryEntry {
 				header: header.clone(),
-				name: unsafe {
-					String::from_raw_parts(
-						ptr.offset(offset),
-						name_len as usize,
-						name_len as usize,
-					)
-				},
+				name: name.to_string(),
 			});
 
 			offset += name_len as isize;
-			offset += 4 - (name_len as isize % 4);
+			if name_len % 4 != 0 {
+				offset += 4 - (name_len as isize % 4);
+			}
 		}
 
 		entries
+	}
+
+	pub fn read(&self, offset: usize, dst: *mut u8, len: usize) -> usize {
+		assert!(offset < 4096, "TODO: read multiple blocks");
+		ide::read(
+			self.fs.device,
+			self.fs.block_to_sector(self.md.i_block[0]),
+			offset,
+			dst,
+			len,
+		);
+		len
 	}
 
 	pub fn lookup(&self, name: &str) -> Option<Inode> {

@@ -7,6 +7,7 @@ initrd := $(target)/lucy.initrd
 kernel := $(target)/lucy
 lib_boot := $(target)/libboot.a
 user_program := target/x86_64-unknown-none/debug/program
+libc := $(target)
 
 .PHONY: all
 all: $(rom)

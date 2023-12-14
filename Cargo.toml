@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "kernel",
-    "user/sys",
     "user/program",
+    "user/libc",
 ]
 resolver = "2"

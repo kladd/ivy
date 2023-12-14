@@ -1,5 +1,7 @@
 use core::{arch::asm, intrinsics::unreachable};
 
+use crate::api;
+
 #[inline]
 fn syscall(number: u64) -> u64 {
 	let mut ret;
@@ -85,6 +87,10 @@ pub fn write(_fd: u64, buf: *const u8, len: usize) {
 
 pub fn read(_fd: u64, buf: *mut u8, len: usize) -> usize {
 	syscall3(5, _fd, buf as u64, len as u64) as usize
+}
+
+pub fn readdir(fd: isize, buf: *mut api::dirent) -> isize {
+	syscall2(7, fd as u64, buf as u64) as isize
 }
 
 /// Currently brk() is only capable of returning the current break (addr = 0) or

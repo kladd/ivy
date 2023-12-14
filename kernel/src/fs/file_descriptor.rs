@@ -1,3 +1,7 @@
+use core::{ffi::c_char, fmt::Write, slice, str};
+
+use log::{debug, trace};
+
 use crate::fs::inode::Inode;
 
 #[derive(Debug)]
@@ -9,5 +13,55 @@ pub struct FileDescriptor {
 impl FileDescriptor {
 	pub fn new(inode: Inode) -> Self {
 		Self { offset: 0, inode }
+	}
+
+	pub fn read(&mut self, dst: *mut u8, len: usize) -> usize {
+		assert!(
+			self.offset + len <= 0x1000,
+			"TODO: Read more than one block"
+		);
+		match &self.inode {
+			Inode::Ext2(inode) => inode.read(self.offset, dst, len),
+			Inode::Device(_) => todo!(),
+		};
+
+		self.offset += len;
+
+		len
+	}
+
+	pub fn readdir(&mut self, dst: *mut libc::api::dirent) {
+		let dirent = unsafe { &mut *dst };
+
+		match &self.inode {
+			Inode::Ext2(inode) => {
+				inode.readdir().get(self.offset).map(|de| {
+					dirent.d_ino = de.header.inode as u64;
+					for (i, c) in de.name.bytes().enumerate() {
+						dirent.d_name[i] = c as c_char;
+					}
+				});
+			}
+			Inode::Device(_) => todo!(),
+		}
+
+		trace!("readdir({dirent:?}");
+		self.offset += 1;
+	}
+
+	pub fn write(&mut self, src: *const u8, len: usize) -> usize {
+		match &mut self.inode {
+			Inode::Ext2(_) => todo!(),
+			Inode::Device(inode) => {
+				let s = unsafe {
+					str::from_utf8_unchecked(slice::from_raw_parts(src, len))
+				};
+				inode.write_str(s).expect("failed to write to dev");
+			}
+		}
+
+		self.offset += len;
+
+		len
 	}
 }
