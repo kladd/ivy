@@ -3,48 +3,50 @@
 
 extern crate alloc;
 
-use alloc::{ffi::CString, format};
-use core::ffi::{c_void, CStr};
-
-use libc::{
-	dirent::{opendir, readdir},
-	fcntl::open,
-	unistd::write,
+use alloc::{ffi::CString, format, string::ToString};
+use core::{
+	ffi::{c_void, CStr},
+	slice, str,
 };
 
-#[no_mangle]
-fn main(_argc: isize, _argv: *const *const u8) -> isize {
-	// let tty = "/dev/tty0";
-	// let fd = open(tty.as_ptr(), tty.len());
-	//
-	//
-	//
-	// if fd < 0 {
-	// 	return fd;
-	// }
-	// stat(fd);
-	//
-	// loop {
-	// 	let len = read(0, buf, 80);
-	// 	let line = unsafe {
-	// 		str::from_utf8_unchecked(slice::from_raw_parts(buf, len))
-	// 	};
-	//
-	// 	match line {
-	// 		"exit" => break,
-	// 		"" => continue,
-	// 		_ => {
-	// 			write(0, line.as_ptr(), line.len());
-	// 			write(0, "\n".as_ptr(), 1);
-	// 		}
-	// 	}
-	// }
-	//
-	// 0
+use libc::{
+	api::{STDIN_FILENO, STDOUT_FILENO},
+	dirent::{opendir, readdir},
+	syscall,
+	unistd::{read, write},
+};
 
-	let console = CString::new("/dev/tty0").unwrap();
-	let fd_cons = open(console.as_ptr(), 0);
+fn shell() {
+	let mut line_buf = [0u8; 128];
+	loop {
+		write(STDOUT_FILENO, "@ ".as_ptr() as *const c_void, 2);
+		let len = read(
+			STDIN_FILENO,
+			line_buf.as_mut_ptr() as *mut c_void,
+			line_buf.len(),
+		);
+		let cmdline = unsafe {
+			str::from_utf8_unchecked(slice::from_raw_parts(
+				line_buf.as_ptr(),
+				len as usize,
+			))
+		};
+		let mut tokens = cmdline.split_ascii_whitespace();
+		match tokens.next() {
+			Some("ls") => ls(),
+			Some("exit") => break,
+			Some("uptime") => uptime(),
+			_ => continue,
+		}
+	}
+}
 
+fn uptime() {
+	let time = format!("{}\n", syscall::uptime());
+	write(STDOUT_FILENO, time.as_ptr() as *const c_void, time.len());
+}
+
+fn ls() {
 	let root = CString::new("/").unwrap();
 	let fd_root = opendir(root.as_ptr());
 
@@ -58,8 +60,12 @@ fn main(_argc: isize, _argv: *const *const u8) -> isize {
 			.unwrap();
 		let name = format!("{name}\n");
 
-		write(fd_cons, name.as_ptr() as *const c_void, name.len());
+		write(STDOUT_FILENO, name.as_ptr() as *const c_void, name.len());
 	}
+}
 
+#[no_mangle]
+fn main(_argc: isize, _argv: *const *const u8) -> isize {
+	shell();
 	0
 }

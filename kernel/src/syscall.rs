@@ -49,15 +49,15 @@ pub unsafe extern "C" fn syscall_enter(regs: &RegisterState) -> isize {
 			return sys_readdir(regs.rdi as isize, regs.rsi as *mut api::dirent)
 		}
 		69 => return sys_brk(regs.rdi),
-		401 => uptime(),
+		401 => return uptime() as isize,
 		403 => debug_long(regs.rdi),
 		_ => trace!("unknown syscall: {}", regs.rax),
 	}
 	0
 }
 
-fn uptime() {
-	writeln!(serial::com1().lock(), "{}", clock::uptime_seconds()).unwrap();
+fn uptime() -> u64 {
+	clock::uptime_seconds()
 }
 
 fn debug_long(long: u64) {
@@ -67,11 +67,11 @@ fn debug_long(long: u64) {
 fn sys_read(fd: isize, ptr: *mut u8, len: usize) -> isize {
 	let cpu = CPU::load();
 	let task = unsafe { &mut *cpu.task };
-	let Some(fd) = task.open_files.get_mut(0) else {
+	let Some(fildes) = task.open_files.get_mut(fd as usize) else {
 		return -1;
 	};
 
-	fd.read(ptr, len) as isize
+	kdbg!(fildes.read(ptr, len) as isize)
 }
 
 fn sys_readdir(fd: isize, ptr: *mut api::dirent) -> isize {

@@ -1,10 +1,13 @@
 use std::{env, path::PathBuf};
 
+use bindgen::MacroTypeVariation;
+
 fn main() {
 	let bindings = bindgen::Builder::default()
 		.use_core()
 		.header("wrapper.h")
 		.blocklist_type("__dirstream")
+		.default_macro_constant_type(MacroTypeVariation::Signed)
 		.clang_arg("-I../../base/usr/include")
 		// .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
 		.generate()

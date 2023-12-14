@@ -93,6 +93,10 @@ pub fn readdir(fd: isize, buf: *mut api::dirent) -> isize {
 	syscall2(7, fd as u64, buf as u64) as isize
 }
 
+pub fn uptime() -> u64 {
+	syscall(401)
+}
+
 /// Currently brk() is only capable of returning the current break (addr = 0) or
 /// incrementing the break by one page (addr != 0).
 pub fn brk(addr: usize) -> usize {

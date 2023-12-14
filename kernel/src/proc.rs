@@ -7,6 +7,7 @@ use core::{
 	sync::atomic::{AtomicU64, Ordering},
 };
 
+use libc::api::open;
 use log::{debug, warn};
 
 use crate::{
@@ -15,7 +16,7 @@ use crate::{
 		vmem::{PageTable, BOOT_PML4_TABLE},
 	},
 	fs,
-	fs::{fs0, inode::Inode},
+	fs::{device::inode::DeviceInode, fs0, inode::Inode, FileDescriptor},
 	mem::{frame, page::Page, KERNEL_VMA, PAGE_SIZE},
 };
 
@@ -108,10 +109,18 @@ impl Task {
 
 		let cr3 = Box::leak(pml4) as *mut _ as usize;
 
+		let mut open_files = Vec::with_capacity(3);
+		open_files
+			.push(FileDescriptor::new(Inode::Device(DeviceInode::Console)));
+		open_files
+			.push(FileDescriptor::new(Inode::Device(DeviceInode::Console)));
+		open_files
+			.push(FileDescriptor::new(Inode::Device(DeviceInode::Serial)));
+
 		Self {
 			pid: NEXT_PID.fetch_add(1, Ordering::Relaxed),
 			cwd: fs0().root().clone(),
-			open_files: Vec::with_capacity(4),
+			open_files,
 			name,
 			rbp,
 			rsp,

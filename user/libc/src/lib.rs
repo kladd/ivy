@@ -10,7 +10,7 @@ mod malloc;
 #[cfg(not(feature = "kernel"))]
 pub mod prelude;
 mod sync;
-mod syscall;
+pub mod syscall;
 pub mod unistd;
 
 pub const PAGE_SIZE: usize = 0x200000;

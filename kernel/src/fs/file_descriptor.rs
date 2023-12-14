@@ -1,4 +1,4 @@
-use core::{ffi::c_char, fmt::Write, slice, str};
+use core::{cmp::min, ffi::c_char, fmt::Write, ptr, slice, str};
 
 use log::{debug, trace};
 
@@ -20,9 +20,14 @@ impl FileDescriptor {
 			self.offset + len <= 0x1000,
 			"TODO: Read more than one block"
 		);
-		match &self.inode {
+		let len = match &self.inode {
 			Inode::Ext2(inode) => inode.read(self.offset, dst, len),
-			Inode::Device(_) => todo!(),
+			Inode::Device(inode) => {
+				let line = inode.read_line();
+				let len = min(len, line.len());
+				unsafe { ptr::copy_nonoverlapping(line.as_ptr(), dst, len) };
+				len
+			}
 		};
 
 		self.offset += len;
