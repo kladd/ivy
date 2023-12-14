@@ -48,6 +48,7 @@ pub unsafe extern "C" fn syscall_enter(regs: &RegisterState) -> isize {
 		7 => {
 			return sys_readdir(regs.rdi as isize, regs.rsi as *mut api::dirent)
 		}
+		8 => return sys_chdir(regs.rdi as *const u8, regs.rsi as usize),
 		69 => return sys_brk(regs.rdi),
 		401 => return uptime() as isize,
 		403 => debug_long(regs.rdi),
@@ -72,6 +73,22 @@ fn sys_read(fd: isize, ptr: *mut u8, len: usize) -> isize {
 	};
 
 	kdbg!(fildes.read(ptr, len) as isize)
+}
+
+fn sys_chdir(path: *const u8, len: usize) -> isize {
+	let cpu = CPU::load();
+	let task = unsafe { &mut *cpu.task };
+	let path = unsafe {
+		let slice = slice::from_raw_parts(path, len);
+		str::from_utf8_unchecked(slice)
+	};
+
+	if let Some(inode) = fs0().find(&task.cwd, path) {
+		task.cwd = inode;
+		0
+	} else {
+		-1
+	}
 }
 
 fn sys_readdir(fd: isize, ptr: *mut api::dirent) -> isize {

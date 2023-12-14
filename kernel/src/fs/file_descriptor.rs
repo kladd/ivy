@@ -1,6 +1,6 @@
 use core::{cmp::min, ffi::c_char, fmt::Write, ptr, slice, str};
 
-use log::{debug, trace};
+use log::trace;
 
 use crate::fs::inode::Inode;
 

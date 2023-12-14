@@ -85,6 +85,10 @@ pub fn write(_fd: u64, buf: *const u8, len: usize) {
 	syscall3(6, _fd, buf as u64, len as u64);
 }
 
+pub fn chdir(buf: *const u8, len: usize) -> isize {
+	syscall2(8, buf as u64, len as u64) as isize
+}
+
 pub fn read(_fd: u64, buf: *mut u8, len: usize) -> usize {
 	syscall3(5, _fd, buf as u64, len as u64) as usize
 }

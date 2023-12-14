@@ -13,7 +13,7 @@ use libc::{
 	api::{STDIN_FILENO, STDOUT_FILENO},
 	dirent::{opendir, readdir},
 	syscall,
-	unistd::{read, write},
+	unistd::{chdir, read, write},
 };
 
 fn shell() {
@@ -33,12 +33,20 @@ fn shell() {
 		};
 		let mut tokens = cmdline.split_ascii_whitespace();
 		match tokens.next() {
-			Some("ls") => ls(),
+			Some("ls") => ls(tokens.next()),
 			Some("exit") => break,
 			Some("uptime") => uptime(),
+			Some("cd") => cd(tokens.next()),
 			_ => continue,
 		}
 	}
+}
+
+fn cd(path: Option<&str>) {
+	let path = path
+		.map(|rstr| CString::new(rstr).unwrap())
+		.unwrap_or(CString::new("/").unwrap());
+	chdir(path.as_ptr());
 }
 
 fn uptime() {
@@ -46,9 +54,11 @@ fn uptime() {
 	write(STDOUT_FILENO, time.as_ptr() as *const c_void, time.len());
 }
 
-fn ls() {
-	let root = CString::new("/").unwrap();
-	let fd_root = opendir(root.as_ptr());
+fn ls(path: Option<&str>) {
+	let path = path
+		.map(|rstr| CString::new(rstr).unwrap())
+		.unwrap_or(CString::new(".").unwrap());
+	let fd_root = opendir(path.as_ptr());
 
 	loop {
 		let entry = unsafe { &*readdir(fd_root) };
