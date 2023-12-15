@@ -1,6 +1,8 @@
 use alloc::string::String;
 use core::mem;
 
+use libc::api;
+
 use crate::fs::{device::inode::DeviceInode, ext2};
 
 #[derive(Debug, Clone)]
@@ -13,6 +15,11 @@ pub enum Inode {
 pub enum InodeHash {
 	Device(mem::Discriminant<DeviceInode>),
 	Ext2(u32),
+}
+
+pub trait Stat {
+	fn mode(&self) -> u16;
+	fn size(&self) -> usize;
 }
 
 impl Inode {
@@ -43,6 +50,29 @@ impl Inode {
 		match self {
 			Inode::Device(inode) => inode.is_dir(),
 			Inode::Ext2(inode) => inode.is_dir(),
+		}
+	}
+}
+
+impl Stat for Inode {
+	fn mode(&self) -> u16 {
+		match self {
+			Inode::Device(inode) => {
+				// TODO: Yuck.
+				if inode.is_dir() {
+					api::S_IFDIR as u16
+				} else {
+					0
+				}
+			}
+			Inode::Ext2(inode) => inode.md.i_mode,
+		}
+	}
+
+	fn size(&self) -> usize {
+		match self {
+			Inode::Device(inode) => 0,
+			Inode::Ext2(inode) => inode.md.i_size as usize,
 		}
 	}
 }

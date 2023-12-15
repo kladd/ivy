@@ -47,6 +47,10 @@ impl CPU {
 			task: ptr::null_mut(),
 		}
 	}
+
+	pub fn current_task(&self) -> &mut Task {
+		unsafe { &mut *self.task }
+	}
 }
 
 #[derive(Debug)]

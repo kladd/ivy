@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+typedef int64_t off_t;
 typedef uint16_t mode_t;
 typedef uint64_t ino_t;
 

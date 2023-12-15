@@ -60,9 +60,9 @@ pub struct BlockGroupDescriptorTable {
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct InodeMetadata {
-	i_mode: u16,
+	pub i_mode: u16,
 	i_uid: u16,
-	i_size: u32,
+	pub i_size: u32,
 	i_atime: u32,
 	i_ctime: u32,
 	i_mtime: u32,
@@ -82,7 +82,7 @@ pub struct InodeMetadata {
 
 #[derive(Debug, Clone)]
 pub struct Inode {
-	md: InodeMetadata,
+	pub md: InodeMetadata,
 	fs: Arc<FileSystem>,
 	name: String,
 	inumber: u32,

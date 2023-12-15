@@ -3,7 +3,7 @@ use core::{arch::asm, intrinsics::unreachable};
 use crate::api;
 
 #[inline]
-fn syscall(number: u64) -> u64 {
+pub(crate) fn syscall(number: u64) -> u64 {
 	let mut ret;
 	unsafe {
 		asm!(
@@ -18,7 +18,7 @@ fn syscall(number: u64) -> u64 {
 }
 
 #[inline]
-fn syscall1(number: u64, a1: u64) -> u64 {
+pub(crate) fn syscall1(number: u64, a1: u64) -> u64 {
 	let mut ret;
 	unsafe {
 		asm!(
@@ -34,7 +34,7 @@ fn syscall1(number: u64, a1: u64) -> u64 {
 }
 
 #[inline]
-fn syscall2(number: u64, a1: u64, a2: u64) -> u64 {
+pub(crate) fn syscall2(number: u64, a1: u64, a2: u64) -> u64 {
 	let mut ret;
 	unsafe {
 		asm!(
@@ -51,7 +51,7 @@ fn syscall2(number: u64, a1: u64, a2: u64) -> u64 {
 }
 
 #[inline]
-fn syscall3(number: u64, a1: u64, a2: u64, a3: u64) -> u64 {
+pub(crate) fn syscall3(number: u64, a1: u64, a2: u64, a3: u64) -> u64 {
 	let mut ret;
 	unsafe {
 		asm!(

@@ -10,7 +10,7 @@ use crate::{
 		vmem::{PageTable, PML4},
 	},
 	devices::{serial, tty::tty0},
-	fs::{fs0, FileDescriptor},
+	fs::{fs0, inode::Stat, FileDescriptor},
 	mem::{frame, page::Page, PhysicalAddress, PAGE_SIZE},
 	proc::CPU,
 };
@@ -56,6 +56,7 @@ pub unsafe extern "C" fn syscall_enter(regs: &mut RegisterState) {
 		7 => sys_readdir(regs.rdi as isize, regs.rsi as *mut api::dirent),
 		8 => sys_chdir(regs.rdi as *const u8, regs.rsi as usize),
 		9 => sys_fork() as isize,
+		10 => sys_fstat(regs.rdi as isize, regs.rsi as *mut api::stat) as isize,
 		69 => sys_brk(regs.rdi),
 		401 => uptime() as isize,
 		403 => debug_long(regs.rdi),
@@ -191,5 +192,18 @@ fn sys_brk(addr: u64) -> isize {
 }
 
 fn sys_fork() -> usize {
+	0
+}
+
+fn sys_fstat(fildes: isize, buf: *mut api::stat) -> isize {
+	let task = CPU::load().current_task();
+	let Some(fd) = task.open_files.get_mut(fildes as usize) else {
+		return -1;
+	};
+
+	let out = unsafe { &mut *buf };
+	out.st_mode = fd.inode.mode();
+	out.st_size = fd.inode.size() as api::off_t;
+
 	0
 }

@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::{ffi::CString, format};
+use alloc::{ffi::CString, format, vec};
 use core::{
 	ffi::{c_void, CStr},
 	slice, str,
@@ -50,8 +50,17 @@ fn cat(path: Option<&str>) {
 	if file < 0 {
 		return;
 	}
-	let mut buf = [0u8; 128];
-	let len = read(file, buf.as_mut_ptr() as *mut c_void, 128);
+	let mut stat = libc::api::stat {
+		st_mode: 0,
+		st_size: 0,
+	};
+	let ret = unsafe { libc::api::fstat(file, &mut stat) };
+	if ret < 0 {
+		return;
+	}
+
+	let mut buf = vec![0u8; stat.st_size as usize];
+	let len = read(file, buf.as_mut_ptr() as *mut c_void, buf.len());
 
 	let contents = unsafe {
 		let slice = slice::from_raw_parts(buf.as_ptr(), len as usize);
