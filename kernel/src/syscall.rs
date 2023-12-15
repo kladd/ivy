@@ -1,4 +1,4 @@
-use alloc::boxed::Box;
+use alloc::{boxed::Box, fmt::format, format, string::String};
 use core::{arch::asm, cmp::min, fmt::Write, ptr, slice, str};
 
 use libc::api;
@@ -10,7 +10,11 @@ use crate::{
 		vmem::{PageTable, PML4},
 	},
 	devices::{serial, tty::tty0},
-	fs::{fs0, inode::Stat, FileDescriptor},
+	fs::{
+		fs0,
+		inode::{Inode, Stat},
+		FileDescriptor,
+	},
 	mem::{frame, page::Page, PhysicalAddress, PAGE_SIZE},
 	proc::CPU,
 };
@@ -57,6 +61,7 @@ pub unsafe extern "C" fn syscall_enter(regs: &mut RegisterState) {
 		8 => sys_chdir(regs.rdi as *const u8, regs.rsi as usize),
 		9 => sys_fork() as isize,
 		10 => sys_fstat(regs.rdi as isize, regs.rsi as *mut api::stat) as isize,
+		11 => sys_getcwd(regs.rdi as *mut u8, regs.rsi as usize),
 		69 => sys_brk(regs.rdi),
 		401 => uptime() as isize,
 		403 => debug_long(regs.rdi),
@@ -205,5 +210,26 @@ fn sys_fstat(fildes: isize, buf: *mut api::stat) -> isize {
 	out.st_mode = fd.inode.mode();
 	out.st_size = fd.inode.size() as api::off_t;
 
+	0
+}
+
+fn sys_getcwd(buf: *mut u8, len: usize) -> isize {
+	let task = CPU::load().current_task();
+	let current_inode = &task.cwd;
+
+	fn prepend_parent(child: &Inode) -> Option<String> {
+		if let Some(parent) = child.parent() {
+			Some(format!(
+				"{}/{}",
+				prepend_parent(&parent).unwrap_or_default(),
+				child.name()
+			))
+		} else {
+			None
+		}
+	}
+
+	let s = prepend_parent(current_inode).unwrap_or(String::from("/"));
+	unsafe { ptr::copy_nonoverlapping(s.as_ptr(), buf, min(len, s.len())) };
 	0
 }

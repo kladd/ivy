@@ -1,5 +1,6 @@
 use alloc::{
 	boxed::Box,
+	rc::Rc,
 	string::{String, ToString},
 	sync::Arc,
 	vec::Vec,
@@ -86,6 +87,7 @@ pub struct Inode {
 	fs: Arc<FileSystem>,
 	name: String,
 	inumber: u32,
+	pub parent: Option<Rc<Inode>>,
 }
 
 #[repr(C)]
@@ -114,13 +116,14 @@ impl FileSystem {
 		Self { device, superblock }
 	}
 
-	pub fn root(self: &Arc<Self>) -> Inode {
-		Inode {
+	pub fn root(self: &Arc<Self>) -> Rc<Inode> {
+		Rc::new(Inode {
 			md: self.inode(ROOT_INODE),
 			fs: Arc::clone(self),
 			name: String::from("/"),
 			inumber: ROOT_INODE,
-		}
+			parent: None,
+		})
 	}
 
 	pub fn inode(&self, inode: u32) -> InodeMetadata {
@@ -247,19 +250,21 @@ impl Inode {
 		len
 	}
 
-	pub fn lookup(&self, name: &str) -> Option<Inode> {
+	pub fn lookup(self: &Rc<Self>, name: &str) -> Option<Rc<Inode>> {
+		trace!("lookup({}/{name})", self.name());
 		let dirent = self
 			.readdir()
 			.into_iter()
-			.find(|dirent| dirent.name == name)?;
+			.find(|dirent| kdbg!(&dirent.name) == name)?;
 		let inode_md = self.fs.inode(dirent.header.inode);
 
-		Some(Inode {
+		Some(Rc::new(Inode {
 			md: inode_md,
 			fs: self.fs.clone(),
 			name: dirent.name,
 			inumber: dirent.header.inode,
-		})
+			parent: Some(self.clone()),
+		}))
 	}
 
 	pub fn hash(&self) -> u32 {

@@ -1,4 +1,4 @@
-use alloc::string::String;
+use alloc::{rc::Rc, string::String};
 use core::mem;
 
 use libc::api;
@@ -8,7 +8,7 @@ use crate::fs::{device::inode::DeviceInode, ext2};
 #[derive(Debug, Clone)]
 pub enum Inode {
 	Device(DeviceInode),
-	Ext2(ext2::Inode),
+	Ext2(Rc<ext2::Inode>),
 }
 
 #[derive(PartialEq, Debug)]
@@ -23,6 +23,13 @@ pub trait Stat {
 }
 
 impl Inode {
+	pub fn parent(&self) -> Option<Self> {
+		match self {
+			Self::Device(node) => todo!(),
+			Inode::Ext2(inode) => Some(Inode::Ext2(inode.parent.clone()?)),
+		}
+	}
+
 	pub fn lookup(&self, name: &str) -> Option<Self> {
 		match self {
 			Self::Device(node) => Some(node.lookup(name)?),

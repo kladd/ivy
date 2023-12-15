@@ -5,12 +5,12 @@ extern crate alloc;
 
 use alloc::{ffi::CString, format, vec};
 use core::{
-	ffi::{c_void, CStr},
+	ffi::{c_char, c_void, CStr},
 	slice, str,
 };
 
 use libc::{
-	api::{STDIN_FILENO, STDOUT_FILENO},
+	api::{getcwd, STDIN_FILENO, STDOUT_FILENO},
 	dirent::{opendir, readdir},
 	fcntl::open,
 	syscall,
@@ -18,9 +18,22 @@ use libc::{
 };
 
 fn shell() {
+	let mut cwd_buf = [0 as c_char; 128];
+	unsafe { getcwd(cwd_buf.as_mut_ptr(), cwd_buf.len()) };
+	let mut prompt = format!(
+		"[{}]$ ",
+		unsafe { CStr::from_ptr(cwd_buf.as_ptr()) }
+			.to_str()
+			.unwrap()
+	);
+
 	let mut line_buf = [0u8; 128];
 	loop {
-		write(STDOUT_FILENO, "@ ".as_ptr() as *const c_void, 2);
+		write(
+			STDOUT_FILENO,
+			prompt.as_ptr() as *const c_void,
+			prompt.len(),
+		);
 		let len = read(
 			STDIN_FILENO,
 			line_buf.as_mut_ptr() as *mut c_void,
@@ -37,7 +50,17 @@ fn shell() {
 			Some("ls") => ls(tokens.next()),
 			Some("exit") => break,
 			Some("uptime") => uptime(),
-			Some("cd") => cd(tokens.next()),
+			Some("cd") => {
+				cd(tokens.next());
+				cwd_buf.iter_mut().for_each(|e| *e = 0);
+				unsafe { getcwd(cwd_buf.as_mut_ptr(), cwd_buf.len()) };
+				prompt = format!(
+					"[{}]$ ",
+					unsafe { CStr::from_ptr(cwd_buf.as_ptr()) }
+						.to_str()
+						.unwrap()
+				);
+			}
 			Some("cat") => cat(tokens.next()),
 			_ => continue,
 		}

@@ -11,6 +11,12 @@ pub fn chdir(path: *const c_char) -> c_int {
 }
 
 #[no_mangle]
+pub fn getcwd(buf: *mut c_char, size: usize) -> *mut c_char {
+	syscall::syscall2(11, buf as u64, size as u64);
+	buf
+}
+
+#[no_mangle]
 pub extern "C" fn read(fildes: c_int, buf: *mut c_void, nbyte: usize) -> isize {
 	syscall::read(fildes as u64, buf as *mut u8, nbyte) as isize
 }

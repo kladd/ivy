@@ -6,7 +6,6 @@ pub mod inode;
 use alloc::vec::Vec;
 
 pub use file_descriptor::FileDescriptor;
-use log::debug;
 
 use crate::{
 	fs::inode::{Inode, InodeHash},
@@ -53,6 +52,8 @@ impl FileSystem {
 	pub fn find(&self, base: &Inode, path: &str) -> Option<Inode> {
 		if path == "." {
 			Some(base.clone())
+		} else if path == ".." {
+			base.parent().clone()
 		} else if path.starts_with("/") {
 			self.find(self.root(), &path[1..])
 		} else {
