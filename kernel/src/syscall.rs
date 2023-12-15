@@ -1,7 +1,8 @@
+use alloc::boxed::Box;
 use core::{arch::asm, cmp::min, fmt::Write, ptr, slice, str};
 
 use libc::api;
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 
 use crate::{
 	arch::amd64::{
@@ -15,54 +16,66 @@ use crate::{
 };
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct RegisterState {
-	rcx: u64,
-	rdx: u64,
-	rsi: u64,
 	rdi: u64,
+	rsi: u64,
+	rbp: u64,
+	rsp: u64,
+	rbx: u64,
+	rdx: u64,
+	rcx: u64,
 	rax: u64,
+	r8: u64,
+	r9: u64,
+	r10: u64,
+	r11: u64,
+	r12: u64,
+	r13: u64,
+	r14: u64,
+	r15: u64,
+	rip: u64,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn syscall_enter(regs: &RegisterState) -> isize {
-	trace!("syscall {:03}", regs.rax);
-	match regs.rax {
-		1 => sys_exit(regs.rdi as isize),
-		2 => return sys_brk(regs.rdi),
-		3 => return sys_open(regs.rdi as *const u8, regs.rsi as usize),
+pub unsafe extern "C" fn syscall_enter(regs: &mut RegisterState) {
+	trace!("syscall {}", regs.rax);
+	let ret = match regs.rax {
+		1 => sys_exit(regs.rdi as isize) as isize,
+		2 => sys_brk(regs.rdi),
+		3 => sys_open(regs.rdi as *const u8, regs.rsi as usize),
 		4 => sys_stat(regs.rdi as usize),
 		5 => {
-			return sys_read(
-				regs.rdi as isize,
-				regs.rsi as *mut u8,
-				regs.rdx as usize,
-			)
+			sys_read(regs.rdi as isize, regs.rsi as *mut u8, regs.rdx as usize)
 		}
-		6 => {
-			return sys_write(
-				regs.rdi as isize,
-				regs.rsi as *const u8,
-				regs.rdx as usize,
-			)
-		}
-		7 => {
-			return sys_readdir(regs.rdi as isize, regs.rsi as *mut api::dirent)
-		}
-		8 => return sys_chdir(regs.rdi as *const u8, regs.rsi as usize),
-		69 => return sys_brk(regs.rdi),
-		401 => return uptime() as isize,
+		6 => sys_write(
+			regs.rdi as isize,
+			regs.rsi as *const u8,
+			regs.rdx as usize,
+		),
+		7 => sys_readdir(regs.rdi as isize, regs.rsi as *mut api::dirent),
+		8 => sys_chdir(regs.rdi as *const u8, regs.rsi as usize),
+		9 => sys_fork() as isize,
+		69 => sys_brk(regs.rdi),
+		401 => uptime() as isize,
 		403 => debug_long(regs.rdi),
-		_ => trace!("unknown syscall: {}", regs.rax),
-	}
-	0
+		_ => {
+			warn!("unknown syscall: {}", regs.rax);
+			-1
+		}
+	};
+
+	regs.rax = ret as u64;
+	trace!("sysret {}", regs.rax);
 }
 
 fn uptime() -> u64 {
 	clock::uptime_seconds()
 }
 
-fn debug_long(long: u64) {
+fn debug_long(long: u64) -> isize {
 	debug!("debug_long: {long:016X}");
+	0
 }
 
 fn sys_read(fd: isize, ptr: *mut u8, len: usize) -> isize {
@@ -128,15 +141,20 @@ fn sys_open(path: *const u8, len: usize) -> isize {
 	return kdbg!(task.open_files.len() as isize - 1);
 }
 
-fn sys_stat(fd: usize) {
+fn sys_stat(fd: usize) -> isize {
 	let cpu = CPU::load();
 	let task = unsafe { &mut *cpu.task };
 	debug!("{:#X?}", task.open_files.get(fd));
+	0
 }
 
-fn sys_exit(status: isize) {
-	info!("program exited with status: {status}");
+fn sys_exit(status: isize) -> usize {
+	let cpu = CPU::load();
+	let task = unsafe { &mut *cpu.task };
+
+	info!("process {} exited with status: {status}", task.pid);
 	breakpoint!();
+	0
 }
 
 fn sys_brk(addr: u64) -> isize {
@@ -170,4 +188,8 @@ fn sys_brk(addr: u64) -> isize {
 	}
 
 	-1
+}
+
+fn sys_fork() -> usize {
+	0
 }

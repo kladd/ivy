@@ -51,7 +51,7 @@ impl CPU {
 
 #[derive(Debug)]
 pub struct Task {
-	pid: u64,
+	pub pid: u64,
 	name: &'static str,
 	pub open_files: Vec<fs::FileDescriptor>,
 	pub cwd: Inode,
