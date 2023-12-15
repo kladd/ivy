@@ -5,7 +5,7 @@ use core::{
 };
 
 use crate::{
-	devices::{serial::com1, tty::tty0},
+	devices::{serial::com1, tty::tty0, video_terminal::vdt0},
 	fs::inode::{Inode, InodeHash},
 };
 
@@ -44,7 +44,7 @@ impl DeviceInode {
 impl DeviceInode {
 	pub fn read_line(&self) -> String {
 		match self {
-			DeviceInode::Console => tty0().lock().read_line(),
+			DeviceInode::Console => vdt0().read_line(),
 			DeviceInode::Serial => todo!(),
 			_ => unimplemented!(),
 		}
@@ -75,7 +75,7 @@ impl DeviceInode {
 impl Write for DeviceInode {
 	fn write_str(&mut self, s: &str) -> core::fmt::Result {
 		match self {
-			DeviceInode::Console => tty0().lock().write_str(s),
+			DeviceInode::Console => vdt0().write_str(s),
 			DeviceInode::Serial => com1().lock().write_str(s),
 			_ => unimplemented!(),
 		}

@@ -5,6 +5,5 @@ pub mod pci;
 pub mod serial;
 pub mod tty;
 pub mod vga;
-// pub mod video;
-// pub mod video_terminal;
-// pub mod video_terminal;
+pub mod video;
+pub mod video_terminal;

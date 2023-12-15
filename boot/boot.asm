@@ -11,10 +11,10 @@ section .multiboot
 multiboot_start:
 	;; Magic (double) word.
 	dd 0x1BADB002
-	;; ALIGN | MEMINFO
-	dd 3
+	;; ALIGN | MEMINFO | VIDEO
+	dd 7
 	;; Checksum
-	dd -(3+0x1BADB002)
+	dd -(7+0x1BADB002)
 	dd 0,0,0,0,0
 
 	;; Unused
@@ -176,7 +176,8 @@ boot_pd:
 	dq 0x200083
 	dq 0x400083
 	dq 0x600083
-	times 508 dq 0
+	dq 0x800083
+	times 507 dq 0
 boot_pdp:
 	dq boot_pd + 0x3 - KERNEL_VMA
 	times 511 dq 0

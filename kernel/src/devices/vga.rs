@@ -17,6 +17,7 @@ const FG: Color = Color::White;
 
 const LF: u8 = '\n' as u8;
 const CR: u8 = '\r' as u8;
+const TAB: u8 = '\t' as u8;
 
 static VGA0: StaticPtr<SpinLock<VideoMemory>> = StaticPtr::new();
 
@@ -53,6 +54,8 @@ impl VideoMemory {
 		match b {
 			LF => self.newline(),
 			CR => self.carriage_return(),
+			// TODO: not always 8 spaces.
+			TAB => self.write_str("        ").unwrap(),
 			_ => self.write_byte_visible(b),
 		}
 	}

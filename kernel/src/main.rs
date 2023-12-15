@@ -46,6 +46,7 @@ use crate::{
 	},
 	devices::{
 		ide, keyboard::init_keyboard, pci::enumerate_pci, serial, tty, vga,
+		video, video::vd0, video_terminal, video_terminal::vdt0,
 	},
 	fs::{device::DeviceFileSystem, ext2, fs0, inode::Inode},
 	kalloc::KernelAllocator,
@@ -88,6 +89,7 @@ pub extern "C" fn kernel_start(
 	let kernel_page_table = PML4::adopt_boot_table().unwrap();
 	let memory_map = read_memory_map(multiboot_info);
 	identity_map_reserved(kernel_page_table, &memory_map);
+	map_framebuffer(kernel_page_table, multiboot_info);
 
 	init_idt();
 	init_pic();
@@ -107,13 +109,25 @@ pub extern "C" fn kernel_start(
 
 	ide::init();
 
-	// Load user program from initrd since we don't have a filesystem yet.
 	let mods: &[MultibootModuleEntry] = unsafe {
 		slice::from_raw_parts(
 			PhysicalAddress(multiboot_info.mods_addr as usize).to_virtual(),
 			multiboot_info.mods_count as usize,
 		)
 	};
+
+	kernel_map(
+		kernel_page_table,
+		PhysicalAddress(mods[0].start as usize),
+		(mods[1].end as usize - mods[1].start as usize).div_ceil(PAGE_SIZE),
+	);
+	video::init(
+		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
+		multiboot_info.framebuffer_width as usize
+			* multiboot_info.framebuffer_height as usize,
+		PhysicalAddress(mods[1].start as usize),
+	);
+	video_terminal::init();
 
 	// Map initrd to load the program stored there.
 	kernel_map(
@@ -209,7 +223,21 @@ fn init_frame_allocator(memory_map: &Vec<MultibootMmapEntry>) {
 	);
 
 	// TODO: Don't hardcode frame allocator region.
-	frame::init(0x600000, 512 * PAGE_SIZE);
+	frame::init(0xA00000, 512 * PAGE_SIZE);
+}
+
+fn map_framebuffer(
+	kernel_page_table: &mut PML4,
+	multiboot_info: &MultibootInfo,
+) {
+	kernel_map(
+		kernel_page_table,
+		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
+		(multiboot_info.framebuffer_bpp as usize / u8::BITS as usize
+			* multiboot_info.framebuffer_height as usize
+			* multiboot_info.framebuffer_width as usize)
+			.div_ceil(PAGE_SIZE),
+	);
 }
 
 enum PageTableLevel {
