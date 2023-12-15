@@ -72,8 +72,9 @@ impl VideoTerminal {
 				Some(Keycode::FormFeed) => self.putc(Keycode::FormFeed),
 				Some(Keycode::VerticalTab) => self.putc(Keycode::VerticalTab),
 				Some(Keycode::Nak) => {
-					s.clear();
-					self.putc(Keycode::Nak);
+					while s.pop().is_some() {
+						self.putc(Keycode::Backspace);
+					}
 				}
 				_ => continue,
 			}
