@@ -251,6 +251,10 @@ impl Inode {
 	}
 
 	pub fn lookup(self: &Rc<Self>, name: &str) -> Option<Rc<Inode>> {
+		if name == ".." {
+			return self.parent.clone();
+		}
+
 		trace!("lookup({}/{name})", self.name());
 		let dirent = self
 			.readdir()
