@@ -44,7 +44,9 @@ impl DeviceInode {
 impl DeviceInode {
 	pub fn read_line(&self) -> String {
 		match self {
+			#[cfg(gfx)]
 			DeviceInode::Console => vdt0().read_line(),
+			DeviceInode::Console => tty0().lock().read_line(),
 			DeviceInode::Serial => todo!(),
 			_ => unimplemented!(),
 		}
@@ -75,7 +77,9 @@ impl DeviceInode {
 impl Write for DeviceInode {
 	fn write_str(&mut self, s: &str) -> core::fmt::Result {
 		match self {
+			#[cfg(gfx)]
 			DeviceInode::Console => vdt0().write_str(s),
+			DeviceInode::Console => tty0().lock().write_str(s),
 			DeviceInode::Serial => com1().lock().write_str(s),
 			_ => unimplemented!(),
 		}

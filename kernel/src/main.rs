@@ -46,7 +46,7 @@ use crate::{
 	},
 	devices::{
 		ide, keyboard::init_keyboard, pci::enumerate_pci, serial, tty, vga,
-		video, video::vd0, video_terminal, video_terminal::vdt0,
+		video, video_terminal,
 	},
 	fs::{device::DeviceFileSystem, ext2, fs0, inode::Inode},
 	kalloc::KernelAllocator,
@@ -96,10 +96,10 @@ pub extern "C" fn kernel_start(
 	init_clock();
 	init_keyboard();
 
-	sti();
-
 	vga::init();
 	tty::init();
+
+	sti();
 
 	init_frame_allocator(&memory_map);
 
@@ -116,18 +116,8 @@ pub extern "C" fn kernel_start(
 		)
 	};
 
-	kernel_map(
-		kernel_page_table,
-		PhysicalAddress(mods[0].start as usize),
-		(mods[1].end as usize - mods[1].start as usize).div_ceil(PAGE_SIZE),
-	);
-	video::init(
-		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
-		multiboot_info.framebuffer_width as usize
-			* multiboot_info.framebuffer_height as usize,
-		PhysicalAddress(mods[1].start as usize),
-	);
-	video_terminal::init();
+	#[cfg(gfx)]
+	init_gfx(multiboot_info, mods, kernel_page_table);
 
 	// Map initrd to load the program stored there.
 	kernel_map(
@@ -158,6 +148,26 @@ pub extern "C" fn kernel_start(
 	unsafe {
 		asm!("jmp _syscall_ret", in("rcx") entry, options(nostack, noreturn))
 	}
+}
+
+#[cfg(gfx)]
+fn init_gfx(
+	multiboot_info: &MultibootInfo,
+	mods: &[MultibootModuleEntry],
+	kernel_page_table: &mut PML4,
+) {
+	kernel_map(
+		kernel_page_table,
+		PhysicalAddress(mods[0].start as usize),
+		(mods[1].end as usize - mods[1].start as usize).div_ceil(PAGE_SIZE),
+	);
+	video::init(
+		PhysicalAddress(multiboot_info.framebuffer_addr as usize),
+		multiboot_info.framebuffer_width as usize
+			* multiboot_info.framebuffer_height as usize,
+		PhysicalAddress(mods[1].start as usize),
+	);
+	video_terminal::init();
 }
 
 fn read_memory_map(multiboot_info: &MultibootInfo) -> Vec<MultibootMmapEntry> {
