@@ -1,11 +1,6 @@
-use core::arch::asm;
-
-use log::debug;
-
-use crate::{arch::amd64::vmem::PML4, mem::page::Page};
+use crate::arch::amd64::vmem::{PageTable, PML4};
 
 pub mod frame;
-pub mod page;
 
 // TODO: Define once (already defined in linker and boot.asm).
 pub const KERNEL_VMA: usize = 0xFFFFFF8000000000;
@@ -13,7 +8,7 @@ pub const KERNEL_LMA: usize = 0x0000000000100000;
 pub const PAGE_SIZE: usize = 0x200000;
 
 #[derive(Debug)]
-pub struct VirtualAddress(usize);
+pub struct VirtualAddress(pub usize);
 
 #[derive(Debug, Copy, Clone)]
 pub struct PhysicalAddress(pub usize);
@@ -28,8 +23,12 @@ impl PhysicalAddress {
 		self.0 | KERNEL_VMA
 	}
 
-	pub fn offset(&self, size: usize) -> PhysicalAddress {
+	pub fn offset(&self, size: usize) -> Self {
 		PhysicalAddress(self.0 + size)
+	}
+
+	pub fn page_align_floor(&self) -> Self {
+		PhysicalAddress(self.0 & !(PAGE_SIZE - 1))
 	}
 }
 
@@ -40,25 +39,24 @@ impl<T> From<*mut T> for PhysicalAddress {
 }
 
 // TODO: Sort this out.
-pub fn kernel_map(pml4: &mut PML4, start: PhysicalAddress, pages: usize) {
-	assert!(pages <= 2, "TODO: ID map more than two pages {}", pages);
+pub fn kernel_map(
+	pml4: &mut PageTable<PML4>,
+	start: PhysicalAddress,
+	pages: usize,
+) {
+	let start = start.page_align_floor();
+
 	// HACK: Don't touch the first meg. TODO: I can't remember why.
-	let region_start = Page::new(start.clone(), 0).entry();
-	if region_start < 0x100000 {
+	if start.0 < 0x100000 {
 		return;
 	}
-	debug!(
-		"Mapping region starting at 0x{:016X}",
-		Page::new(start.clone(), 0).entry()
-	);
-	let pdp = pml4.get_or_alloc(pml4.index(start.to_virtual_addr()), 0x3);
-	let pd = pdp.get_or_alloc(pdp.index(start.to_virtual_addr()), 0x3);
+
 	for i in 0..pages {
-		let virt = start.to_virtual_addr() + (i * PAGE_SIZE);
-		pd.set(
-			pd.index(start.to_virtual_addr() + (i * PAGE_SIZE)),
-			Page::new(start.offset(i * PAGE_SIZE), 0x83),
+		pml4.map(
+			start.offset(i * PAGE_SIZE).0,
+			start.offset(i * PAGE_SIZE).to_virtual_addr(),
+			0x83,
+			true,
 		);
-		unsafe { asm!("invlpg [{}]", in(reg) virt) };
 	}
 }

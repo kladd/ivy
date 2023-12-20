@@ -1,174 +1,229 @@
-use alloc::{alloc::alloc_zeroed, boxed::Box};
+use alloc::alloc::alloc_zeroed;
 use core::{
 	alloc::Layout,
+	arch::asm,
+	marker::PhantomData,
 	ops::{Index, IndexMut},
 };
 
-use crate::mem::{page::Page, PhysicalAddress};
+use log::{debug, warn};
 
-#[repr(align(4096))]
-#[derive(Clone, Debug)]
-pub struct PageTable(pub [usize; 512]);
+use crate::mem::{PhysicalAddress, KERNEL_VMA, PAGE_SIZE};
 
-pub const BOOT_PML4_TABLE: *mut PageTable = boot_pml4 as *mut PageTable;
-pub const KERN_PML4_TABLE: Option<*mut PML4> = Some(boot_pml4 as *mut PML4);
-pub const BOOT_PDP_TABLE: *mut PageTable = boot_pdp as *mut PageTable;
-pub const BOOT_PD_TABLE: *mut PageTable = boot_pd as *mut PageTable;
+pub trait Table {
+	fn index_of(addr: usize) -> usize;
+	fn name() -> &'static str;
+}
+pub trait PageTableDirectory: Table {
+	type NextTable: Table;
+}
 
-#[repr(align(4096))]
-#[derive(Clone, Debug)]
-pub struct PML4([usize; 512]);
+pub enum PML4 {}
 
-#[repr(align(4096))]
-#[derive(Clone, Debug)]
-pub struct PDP(pub [usize; 512]);
-
-#[repr(align(4096))]
-#[derive(Clone, Debug)]
-pub struct PD(pub [usize; 512]);
-
-impl PML4 {
-	const MASK: usize = !0xFF;
-
-	pub fn index(&self, addr: usize) -> usize {
+impl Table for PML4 {
+	fn index_of(addr: usize) -> usize {
 		(addr >> 21 >> 9 >> 9) & 0x1FF
 	}
 
-	pub fn set(&mut self, index: usize, pdp: Box<PDP>, flags: usize) {
-		self.0[index] = PhysicalAddress::from(Box::into_raw(pdp)).0 + flags;
-	}
-
-	pub fn get(&self, index: usize) -> Option<&mut PDP> {
-		if self.0[index] == 0 {
-			None
-		} else {
-			unsafe {
-				Some(
-					&mut *(PhysicalAddress(self.0[index] & Self::MASK)
-						.to_virtual()),
-				)
-			}
-		}
-	}
-
-	pub fn get_or_alloc(&mut self, index: usize, flags: usize) -> &mut PDP {
-		if self.0[index] == 0 {
-			self.set(index, PDP::alloc(), flags);
-		}
-		self.get(index).unwrap()
-	}
-
-	pub fn alloc() -> Box<Self> {
-		unsafe { Box::from_raw(Self::alloc_raw()) }
-	}
-
-	fn alloc_raw() -> *mut Self {
-		unsafe { alloc_zeroed(Layout::new::<Self>()) as *mut _ }
-	}
-
-	pub fn adopt_boot_table() -> Option<&'static mut Self> {
-		KERN_PML4_TABLE.map(|s| unsafe { &mut *s }).take()
+	fn name() -> &'static str {
+		"PML4"
 	}
 }
 
-impl PDP {
-	const MASK: usize = !0xFF;
+impl PageTableDirectory for PML4 {
+	type NextTable = PDP;
+}
 
-	pub fn index(&self, addr: usize) -> usize {
+pub enum PDP {}
+
+impl Table for PDP {
+	fn index_of(addr: usize) -> usize {
 		(addr >> 21 >> 9) & 0x1FF
 	}
 
-	pub fn set(&mut self, index: usize, pd: Box<PD>, flags: usize) {
-		self.0[index] = PhysicalAddress::from(Box::into_raw(pd)).0 + flags;
-	}
-
-	pub fn get(&mut self, index: usize) -> Option<&mut PD> {
-		if self.0[index] == 0 {
-			None
-		} else {
-			unsafe {
-				Some(
-					&mut *(PhysicalAddress(self.0[index] & Self::MASK)
-						.to_virtual()),
-				)
-			}
-		}
-	}
-
-	pub fn get_or_alloc(&mut self, index: usize, flags: usize) -> &mut PD {
-		if self.0[index] == 0 {
-			self.set(index, PD::alloc(), flags);
-		}
-		self.get(index).unwrap()
-	}
-
-	pub fn alloc() -> Box<Self> {
-		unsafe { Box::from_raw(Self::alloc_raw()) }
-	}
-
-	pub fn alloc_raw() -> *mut Self {
-		unsafe { alloc_zeroed(Layout::new::<Self>()) as *mut _ }
+	fn name() -> &'static str {
+		"PDP"
 	}
 }
 
-impl PD {
-	const MASK: usize = !0xFF;
+impl PageTableDirectory for PDP {
+	type NextTable = PD;
+}
 
-	pub fn index(&self, addr: usize) -> usize {
+pub enum PD {}
+
+impl Table for PD {
+	fn index_of(addr: usize) -> usize {
 		(addr >> 21) & 0x1FF
 	}
 
-	pub fn set(&mut self, index: usize, pde: Page) {
-		self.0[index] = pde.entry();
-	}
-
-	pub fn get(&mut self, index: usize) -> Option<Page> {
-		Page::from_entry(self.0[index])
-	}
-
-	pub fn alloc() -> Box<Self> {
-		unsafe { Box::from_raw(Self::alloc_raw()) }
-	}
-
-	pub fn alloc_raw() -> *mut Self {
-		unsafe { alloc_zeroed(Layout::new::<Self>()) as *mut _ }
+	fn name() -> &'static str {
+		"PD"
 	}
 }
 
-impl PageTable {
-	pub fn index(addr: usize) -> (usize, usize, usize) {
-		let pml4 = ((addr >> 21 >> 9 >> 9) & 0x1FF);
-		let pdp = ((addr >> 21 >> 9) & 0x1FF);
-		let pd = ((addr >> 21) & 0x1FF);
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct Page(u64);
 
-		(pml4, pdp, pd)
+impl Page {
+	pub const PRESENT: u64 = 0x1 << 0;
+	pub const READ_WRITE: u64 = 0x1 << 1;
+	pub const USER: u64 = 0x1 << 2;
+	pub const HUGE: u64 = 0x1 << 7;
+
+	pub fn new(addr: PhysicalAddress, flags: u64) -> Self {
+		assert_eq!(addr.0 % 0x1000, 0);
+		let pg = Self(addr.0 as u64 | flags);
+		pg
 	}
 
-	pub fn alloc() -> Box<Self> {
-		unsafe { Box::from_raw(Self::alloc_raw()) }
+	pub fn has(&self, flags: u64) -> bool {
+		(self.0 & flags) == flags
 	}
 
-	pub fn alloc_raw() -> *mut PageTable {
-		unsafe { alloc_zeroed(Layout::new::<PageTable>()) as *mut PageTable }
+	pub fn set(&mut self, flags: u64) {
+		self.0 &= flags;
+	}
+
+	pub fn unset(&mut self, flags: u64) {
+		self.0 &= !flags;
+	}
+
+	pub fn address(&self) -> PhysicalAddress {
+		PhysicalAddress((self.0 & !0x1FF) as usize)
 	}
 }
 
-impl Index<usize> for PageTable {
-	type Output = usize;
+#[repr(align(0x1000))]
+#[repr(C)]
+pub struct PageTable<L: Table> {
+	entries: [Page; 512],
+	level: PhantomData<L>,
+}
+
+impl PageTable<PML4> {
+	pub fn map(&mut self, phys: usize, virt: usize, flags: u64, invlpg: bool) {
+		assert_eq!(phys % PAGE_SIZE, 0);
+		assert_eq!(virt % PAGE_SIZE, 0);
+
+		// TODO: All pages are huge.
+		let pd = self
+			.next_alloc(PML4::index_of(virt), flags & !Page::HUGE)
+			.next_alloc(PDP::index_of(virt), flags & !Page::HUGE);
+
+		if pd.entries[PD::index_of(virt)].has(Page::PRESENT) {
+			warn!("Not mapping present page P: {phys:016X?}, V: {virt:016X?}");
+			return;
+		}
+
+		pd.entries[PD::index_of(virt)] =
+			Page::new(PhysicalAddress(phys), flags | Page::HUGE);
+
+		if invlpg {
+			unsafe { asm!("invlpg [{}]", in(reg) virt) };
+		}
+	}
+
+	pub fn current_mut() -> &'static mut PageTable<PML4> {
+		unsafe {
+			let mut cr3: usize;
+			asm!( "mov {}, cr3", out(reg) cr3 );
+			&mut *PhysicalAddress(cr3).to_virtual()
+		}
+	}
+
+	pub fn new_with_kernel() -> &'static mut Self {
+		let current = Self::current_mut();
+		let new = unsafe { &mut *(Self::alloc() as *mut Self) };
+
+		for i in 0..current.entries.len() {
+			if current.entries[i].has(Page::PRESENT)
+				&& !current.entries[i].has(Page::USER)
+			{
+				new.entries[i] = current.entries[i];
+			}
+		}
+
+		new
+	}
+}
+
+impl<L: Table> PageTable<L> {
+	fn index_of(&self, addr: usize) -> usize {
+		L::index_of(addr)
+	}
+
+	fn alloc() -> usize {
+		unsafe { alloc_zeroed(Layout::new::<Self>()) as *mut _ as usize }
+	}
+}
+
+impl<L: Table> Index<usize> for PageTable<L> {
+	type Output = Page;
 
 	fn index(&self, index: usize) -> &Self::Output {
-		&self.0[index]
+		&self.entries[index]
 	}
 }
 
-impl IndexMut<usize> for PageTable {
+impl<L: Table> IndexMut<usize> for PageTable<L> {
 	fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-		&mut self.0[index]
+		&mut self.entries[index]
 	}
 }
 
-extern "C" {
-	fn boot_pml4();
-	fn boot_pdp();
-	fn boot_pd();
+impl<L: PageTableDirectory> PageTable<L> {
+	pub fn next(&mut self, idx: usize) -> Option<&mut PageTable<L::NextTable>> {
+		if self.entries[idx].has(Page::PRESENT) {
+			Some(unsafe { &mut *self.entries[idx].address().to_virtual() })
+		} else {
+			None
+		}
+	}
+
+	pub fn next_alloc(
+		&mut self,
+		idx: usize,
+		flags: u64,
+	) -> &mut PageTable<L::NextTable> {
+		if self.entries[idx].has(Page::PRESENT) {
+			return self.next(idx).unwrap();
+		}
+
+		debug!(
+			"{}[{}] is missing, allocating ({flags:02X})",
+			L::name(),
+			idx
+		);
+
+		let addr = Self::alloc();
+		self.entries[idx] =
+			Page::new(PhysicalAddress(addr - KERNEL_VMA), flags & !Page::HUGE);
+
+		self.next(idx).unwrap()
+	}
+}
+
+pub fn page_table_index(vaddr: usize) -> (usize, usize, usize) {
+	(
+		PML4::index_of(vaddr),
+		PDP::index_of(vaddr),
+		PD::index_of(vaddr),
+	)
+}
+
+pub fn map_physical_memory(size: usize) {
+	assert_eq!(size % PAGE_SIZE, 0);
+
+	let pml4 = PageTable::<PML4>::current_mut();
+
+	for addr in (0..size).step_by(PAGE_SIZE) {
+		pml4.map(
+			addr,
+			PhysicalAddress(addr).to_virtual_addr(),
+			Page::PRESENT | Page::READ_WRITE,
+			true,
+		);
+	}
 }

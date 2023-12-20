@@ -10,13 +10,10 @@ use core::{
 use log::debug;
 
 use crate::{
-	arch::amd64::{
-		idt::InterruptEntry,
-		vmem::{PageTable, BOOT_PML4_TABLE},
-	},
+	arch::amd64::{idt::InterruptEntry, vmem, vmem::PML4},
 	fs,
 	fs::{device::inode::DeviceInode, fs0, inode::Inode, FileDescriptor},
-	mem::{frame, page::Page, KERNEL_VMA, PAGE_SIZE},
+	mem::{frame, KERNEL_VMA, PAGE_SIZE},
 };
 
 static NEXT_PID: AtomicU64 = AtomicU64::new(0);
@@ -69,48 +66,33 @@ impl Task {
 	const STACK_SIZE: usize = 0x1000;
 	const STACK_ALIGN: usize = 0x1000;
 	pub const START_ADDR: usize = 0x200000;
+	pub const STACK_BOTTOM: usize = 0xFFFFFE8000000000;
 
 	pub fn new(name: &'static str) -> Self {
-		let rbp = PAGE_SIZE;
-		let rsp = 2 * PAGE_SIZE - size_of::<InterruptEntry>();
-
 		let mut falloc = frame::current_mut().lock();
 
-		// HACK: Programs better not exceed 2MB!!
-		let program_page = Page::new(falloc.alloc(), 0x87);
-		let stack_page = Page::new(falloc.alloc(), 0x87);
-
-		debug!("page entry {:016X}", program_page.entry());
-		debug!("stack entry {:016X}", stack_page.entry());
-
-		let (pml4_i, pdp_i, pd_i) = PageTable::index(Self::START_ADDR);
-
 		// Copy the existing PML4 table, which maps the kernel already.
-		let mut pml4 = unsafe {
-			let table = kdbg!(alloc_zeroed(Layout::new::<PageTable>()))
-				as *mut PageTable;
-			table.copy_from(BOOT_PML4_TABLE, 1);
-			debug!("TABLE: 0x{table:016X?}");
-			Box::from_raw(table)
-		};
-		let mut pdp = unsafe {
-			Box::from_raw(
-				alloc_zeroed(Layout::new::<PageTable>()) as *mut PageTable
-			)
-		};
-		let mut pd = unsafe {
-			Box::from_raw(
-				alloc_zeroed(Layout::new::<PageTable>()) as *mut PageTable
-			)
-		};
-		pd[pd_i] = program_page.entry();
-		// HACK: Stack is code page plus one..
-		pd[pd_i + 1] = stack_page.entry();
-		// TODO: Flags.
-		pdp[pdp_i] = Box::leak(pd) as *mut _ as usize - KERNEL_VMA + 0x7;
-		pml4[pml4_i] = Box::leak(pdp) as *mut _ as usize - KERNEL_VMA + 0x7;
+		let pml4 = vmem::PageTable::<PML4>::new_with_kernel();
+		let cr3 = pml4 as *mut _ as usize;
 
-		let cr3 = Box::leak(pml4) as *mut _ as usize;
+		// HACK: Programs better not exceed 2MB!!
+		let rbp = Self::STACK_BOTTOM;
+		let rsp = Self::STACK_BOTTOM + PAGE_SIZE - 16;
+		pml4.map(
+			falloc.alloc().0,
+			Self::START_ADDR,
+			vmem::Page::HUGE
+				| vmem::Page::PRESENT
+				| vmem::Page::USER
+				| vmem::Page::READ_WRITE,
+			false,
+		);
+		pml4.map(
+			falloc.alloc().0,
+			Self::STACK_BOTTOM,
+			vmem::Page::PRESENT | vmem::Page::USER | vmem::Page::READ_WRITE,
+			false,
+		);
 
 		let mut open_files = Vec::with_capacity(3);
 		open_files

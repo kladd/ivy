@@ -7,15 +7,14 @@ use log::{debug, info, trace, warn};
 use crate::{
 	arch::amd64::{
 		clock,
-		vmem::{PageTable, PML4},
+		vmem::{page_table_index, Page, PageTable, Table, PML4},
 	},
-	devices::{serial, tty::tty0},
 	fs::{
 		fs0,
 		inode::{Inode, Stat},
 		FileDescriptor,
 	},
-	mem::{frame, page::Page, PhysicalAddress, PAGE_SIZE},
+	mem::{frame, PAGE_SIZE},
 	proc::CPU,
 };
 
@@ -167,14 +166,15 @@ fn sys_brk(addr: u64) -> isize {
 	let cpu = CPU::load();
 	let task = unsafe { &*cpu.task };
 
-	let pml4: &PML4 = unsafe { &*(PhysicalAddress(task.cr3).to_virtual()) };
-	let pdp = pml4.get(0).unwrap();
-	let pd = pdp.get(0).unwrap();
+	let (i_pml4, i_pdp, i_pd) = page_table_index(task.rip);
+	let pd = PageTable::<PML4>::current_mut()
+		.next(i_pml4)
+		.expect("unmapped page that should definitely be mapped")
+		.next(i_pdp)
+		.expect("unmapped page that should definitely be mapped");
 
-	let (_, _, start) = PageTable::index(task.rip);
-
-	for i in start..512 {
-		if pd.get(i).is_none() {
+	for i in i_pd..512 {
+		if !pd[i].has(Page::PRESENT) {
 			let brk = (i * PAGE_SIZE) as isize;
 
 			if addr == 0 {
@@ -182,7 +182,10 @@ fn sys_brk(addr: u64) -> isize {
 			} else {
 				// TODO: Move this whole mess and implement mmap instead.
 				let mut frame_allocator = frame::current_mut().lock();
-				pd.set(i, Page::new(frame_allocator.alloc(), 0x87));
+				pd[i] = Page::new(
+					frame_allocator.alloc(),
+					Page::READ_WRITE | Page::HUGE | Page::USER | Page::PRESENT,
+				);
 				unsafe {
 					// TODO: This only works if this PD is at PDP[0], PML4[0].
 					asm!("invlpg [{}]", in(reg) brk);

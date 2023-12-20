@@ -41,12 +41,11 @@ use crate::{
 		gdt, hlt,
 		idt::init_idt,
 		pic::init_pic,
-		sti,
-		vmem::{PageTable, PML4},
+		sti, vmem,
+		vmem::{map_physical_memory, PageTable, PML4},
 	},
 	devices::{
 		ide, keyboard::init_keyboard, pci::enumerate_pci, serial, tty, vga,
-		video, video_terminal,
 	},
 	fs::{device::DeviceFileSystem, ext2, fs0, inode::Inode},
 	kalloc::KernelAllocator,
@@ -86,7 +85,7 @@ pub extern "C" fn kernel_start(
 
 	debug!("kernel end {:016X}", _kernel_end as usize - KERNEL_VMA);
 
-	let kernel_page_table = PML4::adopt_boot_table().unwrap();
+	let kernel_page_table = PageTable::<PML4>::current_mut();
 	let memory_map = read_memory_map(multiboot_info);
 	identity_map_reserved(kernel_page_table, &memory_map);
 	map_framebuffer(kernel_page_table, multiboot_info);
@@ -98,6 +97,8 @@ pub extern "C" fn kernel_start(
 
 	vga::init();
 	tty::init();
+
+	map_physical_memory(512 * 2 * 0x200000);
 
 	sti();
 
@@ -196,7 +197,7 @@ fn read_memory_map(multiboot_info: &MultibootInfo) -> Vec<MultibootMmapEntry> {
 }
 
 fn identity_map_reserved(
-	kernel_page_table: &mut PML4,
+	kernel_page_table: &mut PageTable<PML4>,
 	memory_map: &Vec<MultibootMmapEntry>,
 ) {
 	for region in memory_map {
@@ -237,7 +238,7 @@ fn init_frame_allocator(memory_map: &Vec<MultibootMmapEntry>) {
 }
 
 fn map_framebuffer(
-	kernel_page_table: &mut PML4,
+	kernel_page_table: &mut PageTable<PML4>,
 	multiboot_info: &MultibootInfo,
 ) {
 	kernel_map(
@@ -248,51 +249,6 @@ fn map_framebuffer(
 			* multiboot_info.framebuffer_width as usize)
 			.div_ceil(PAGE_SIZE),
 	);
-}
-
-enum PageTableLevel {
-	PML4,
-	PDP,
-	PD,
-}
-
-impl PageTableLevel {
-	pub fn indent(&self) -> &'static str {
-		match self {
-			Self::PML4 => "",
-			Self::PDP => "    ",
-			Self::PD => "        ",
-		}
-	}
-
-	pub fn next(
-		&self,
-		entry: usize,
-	) -> Option<(*mut PageTable, PageTableLevel)> {
-		match self {
-			Self::PML4 => Some((
-				((entry & !0xFFusize) + KERNEL_VMA) as *mut PageTable,
-				PageTableLevel::PDP,
-			)),
-			Self::PDP => Some((
-				((entry & !0xFFusize) + KERNEL_VMA) as *mut PageTable,
-				PageTableLevel::PD,
-			)),
-			Self::PD => None,
-		}
-	}
-}
-
-pub fn dump_pt(pt: *mut PageTable, level: PageTableLevel) {
-	for (i, ent) in unsafe { &*pt }.0.iter().enumerate() {
-		if *ent != 0 {
-			debug!("{}[{i:03}] = {:016X}", level.indent(), ent & !0b10000);
-			level.next(*ent).map(|(pt, pl)| {
-				debug!("{}[ ~ ] = {:016X}", level.indent(), pt as usize);
-				dump_pt(pt, pl)
-			});
-		}
-	}
 }
 
 extern "C" {
