@@ -14,6 +14,7 @@ use libc::{
 	dirent::{opendir, readdir},
 	fcntl::open,
 	syscall,
+	syscall::fork,
 	unistd::{chdir, read, write},
 };
 
@@ -61,10 +62,26 @@ fn shell() {
 						.unwrap()
 				);
 			}
+			Some("fork") => {
+				let pid = fork();
+				if pid == 0 {
+					print("I'm the child\n");
+				} else {
+					print(&format!("I'm the parent. The child is {pid}.\n"))
+				}
+			}
 			Some("cat") => cat(tokens.next()),
 			_ => continue,
 		}
 	}
+}
+
+fn print(message: &str) {
+	write(
+		STDOUT_FILENO,
+		message.as_ptr() as *const c_void,
+		message.len(),
+	);
 }
 
 fn cat(path: Option<&str>) {

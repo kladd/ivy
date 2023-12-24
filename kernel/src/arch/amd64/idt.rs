@@ -7,8 +7,13 @@ use core::{
 use log::{debug, warn};
 
 use crate::{
-	arch::amd64::{cli, hlt, outb},
+	arch::amd64::{
+		cli, hlt, outb,
+		vmem::{debug_page_directory, Page, PageTable, PML4},
+	},
 	kdbg,
+	mem::PhysicalAddress,
+	proc::CPU,
 };
 
 const MAX_INTERRUPTS: usize = 256;
@@ -125,6 +130,7 @@ extern "x86-interrupt" fn invalid_opcode(interrupt: Interrupt) {
 }
 
 extern "x86-interrupt" fn page_fault(interrupt: Interrupt, error: usize) {
+	debug_page_directory(PageTable::<PML4>::current_mut(), Page::USER);
 	panic!(
 		"#PF({:016X}, error: {error:016X}): {interrupt:#?}",
 		interrupt.rip

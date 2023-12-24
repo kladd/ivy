@@ -98,5 +98,5 @@ pub fn load(elf: PhysicalAddress, task: &mut Task) {
 		}
 	}
 
-	task.rip = header.e_entry as usize;
+	task.register_state.rip = header.e_entry;
 }

@@ -1,8 +1,10 @@
 use core::{cmp::min, ffi::c_char, fmt::Write, ptr, slice, str};
 
+use log::trace;
+
 use crate::fs::inode::Inode;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileDescriptor {
 	pub(super) offset: usize,
 	pub inode: Inode,

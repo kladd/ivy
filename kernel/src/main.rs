@@ -32,7 +32,7 @@ use core::{
 	slice, str,
 };
 
-use log::{debug, error};
+use log::{debug, error, info};
 
 use crate::{
 	arch::amd64::{
@@ -135,19 +135,16 @@ pub extern "C" fn kernel_start(
 	// First user process.
 	let mut task = Task::new("user");
 
-	// Switch to task page directory.
-	unsafe { asm!("mov cr3, {}", in(reg) task.cr3) };
-	elf::load(PhysicalAddress(mods[0].start as usize), &mut task);
-
 	let mut cpu = CPU::new();
-	let entry = task.rip;
-	cpu.rsp3 = task.rsp;
-	cpu.task = Box::into_raw(Box::new(task));
+	cpu.switch_task(&mut task);
 	cpu.store();
+
+	// Load after page table switch in switch_task().
+	elf::load(PhysicalAddress(mods[0].start as usize), &mut task);
 
 	// SYSRET to user program.
 	unsafe {
-		asm!("jmp _syscall_ret", in("rcx") entry, options(nostack, noreturn))
+		asm!("jmp _syscall_ret", in("rcx") task.register_state.rip, options(nostack, noreturn))
 	}
 }
 

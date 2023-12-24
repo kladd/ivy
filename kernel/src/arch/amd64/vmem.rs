@@ -4,11 +4,12 @@ use core::{
 	arch::asm,
 	marker::PhantomData,
 	ops::{Index, IndexMut},
+	ptr,
 };
 
 use log::{debug, warn};
 
-use crate::mem::{PhysicalAddress, KERNEL_VMA, PAGE_SIZE};
+use crate::mem::{frame, PhysicalAddress, KERNEL_VMA, PAGE_SIZE};
 
 pub trait Table {
 	fn index_of(addr: usize) -> usize;
@@ -93,6 +94,10 @@ impl Page {
 	pub fn address(&self) -> PhysicalAddress {
 		PhysicalAddress((self.0 & !0x1FF) as usize)
 	}
+
+	pub fn flags(&self) -> u64 {
+		self.0 & 0x1FF
+	}
 }
 
 #[repr(align(0x1000))]
@@ -138,14 +143,95 @@ impl PageTable<PML4> {
 		let new = unsafe { &mut *(Self::alloc() as *mut Self) };
 
 		for i in 0..current.entries.len() {
-			if current.entries[i].has(Page::PRESENT)
-				&& !current.entries[i].has(Page::USER)
-			{
-				new.entries[i] = current.entries[i];
+			let entry = current.entries[i];
+			if entry.has(Page::PRESENT) && !entry.has(Page::USER) {
+				new.entries[i] = entry;
 			}
 		}
 
 		new
+	}
+
+	pub fn fork(&self) -> &'static mut Self {
+		let new = Self::new_with_kernel();
+		copy_user_page_directories(self, new);
+		new
+	}
+}
+
+// TODO: Needs more nesting.
+pub fn debug_page_directory(dir: &PageTable<PML4>, filter: u64) {
+	for i in 0..dir.entries.len() {
+		let entry = dir.entries[i];
+		if entry.has(filter) {
+			debug!("[{i:03}] {:016X}:{:03X}", entry.address().0, entry.flags());
+			let Some(pdp) = dir.next(i) else {
+				continue;
+			};
+
+			for i in 0..pdp.entries.len() {
+				let entry = pdp.entries[i];
+				if entry.has(filter) {
+					debug!(
+						"    [{i:03}] {:016X}:{:03X}",
+						entry.address().0,
+						entry.flags()
+					);
+					let Some(pd) = pdp.next(i) else {
+						continue;
+					};
+
+					for i in 0..pd.entries.len() {
+						let entry = pd.entries[i];
+						if entry.has(filter) {
+							debug!(
+								"        [{i:03}] {:016X}:{:03X}",
+								entry.address().0,
+								entry.flags()
+							);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// TODO: Needs more nesting.
+fn copy_user_page_directories(
+	src: &PageTable<PML4>,
+	dst: &mut PageTable<PML4>,
+) {
+	for i in 0..src.entries.len() {
+		if src.entries[i].has(Page::PRESENT | Page::USER) {
+			let pdp_new = dst.next_alloc(i, 7);
+			let pdp_cur = src.next(i).unwrap();
+
+			for i in 0..pdp_cur.entries.len() {
+				if pdp_cur.entries[i].has(Page::PRESENT | Page::USER) {
+					let pd_new = pdp_new.next_alloc(i, 7);
+					let pd_cur = pdp_cur.next(i).unwrap();
+
+					copy_user_page_table(pd_cur, pd_new);
+				}
+			}
+		}
+	}
+}
+
+fn copy_user_page_table(src: &PageTable<PD>, dst: &mut PageTable<PD>) {
+	let mut falloc = frame::current_mut().lock();
+	for i in 0..src.entries.len() {
+		if src.entries[i].has(Page::PRESENT | Page::USER) {
+			dst[i] = Page::new(falloc.alloc(), 0x87);
+			unsafe {
+				ptr::copy_nonoverlapping(
+					src.entries[i].address().to_virtual() as *const u8,
+					dst[i].address().to_virtual(),
+					PAGE_SIZE,
+				);
+			}
+		}
 	}
 }
 
@@ -174,7 +260,18 @@ impl<L: Table> IndexMut<usize> for PageTable<L> {
 }
 
 impl<L: PageTableDirectory> PageTable<L> {
-	pub fn next(&mut self, idx: usize) -> Option<&mut PageTable<L::NextTable>> {
+	pub fn next(&self, idx: usize) -> Option<&PageTable<L::NextTable>> {
+		if self.entries[idx].has(Page::PRESENT) {
+			Some(unsafe { &mut *self.entries[idx].address().to_virtual() })
+		} else {
+			None
+		}
+	}
+
+	pub fn next_mut(
+		&mut self,
+		idx: usize,
+	) -> Option<&mut PageTable<L::NextTable>> {
 		if self.entries[idx].has(Page::PRESENT) {
 			Some(unsafe { &mut *self.entries[idx].address().to_virtual() })
 		} else {
@@ -188,7 +285,7 @@ impl<L: PageTableDirectory> PageTable<L> {
 		flags: u64,
 	) -> &mut PageTable<L::NextTable> {
 		if self.entries[idx].has(Page::PRESENT) {
-			return self.next(idx).unwrap();
+			return self.next_mut(idx).unwrap();
 		}
 
 		debug!(
@@ -201,7 +298,7 @@ impl<L: PageTableDirectory> PageTable<L> {
 		self.entries[idx] =
 			Page::new(PhysicalAddress(addr - KERNEL_VMA), flags & !Page::HUGE);
 
-		self.next(idx).unwrap()
+		self.next_mut(idx).unwrap()
 	}
 }
 

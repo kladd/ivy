@@ -1,34 +1,37 @@
-use alloc::{boxed::Box, fmt::format, format, string::String};
-use core::{arch::asm, cmp::min, fmt::Write, ptr, slice, str};
+use alloc::{format, string::String};
+use core::{arch::asm, cmp::min, mem, mem::size_of, ptr, slice, str};
 
 use libc::api;
 use log::{debug, info, trace, warn};
 
 use crate::{
 	arch::amd64::{
-		clock,
-		vmem::{page_table_index, Page, PageTable, Table, PML4},
+		cli, clock,
+		vmem::{
+			debug_page_directory, page_table_index, Page, PageTable, Table,
+			PML4,
+		},
 	},
 	fs::{
 		fs0,
 		inode::{Inode, Stat},
 		FileDescriptor,
 	},
-	mem::{frame, PAGE_SIZE},
-	proc::CPU,
+	mem::{frame, PhysicalAddress, PAGE_SIZE},
+	proc::{Task, CPU},
 };
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct RegisterState {
-	rdi: u64,
-	rsi: u64,
-	rbp: u64,
-	rsp: u64,
+	pub rdi: u64,
+	pub rsi: u64,
+	pub rbp: u64,
+	pub rsp: u64,
 	rbx: u64,
 	rdx: u64,
-	rcx: u64,
-	rax: u64,
+	pub rcx: u64,
+	pub rax: u64,
 	r8: u64,
 	r9: u64,
 	r10: u64,
@@ -37,14 +40,14 @@ pub struct RegisterState {
 	r13: u64,
 	r14: u64,
 	r15: u64,
-	rip: u64,
+	pub rip: u64,
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn syscall_enter(regs: &mut RegisterState) {
 	trace!("syscall {}", regs.rax);
 	let ret = match regs.rax {
-		1 => sys_exit(regs.rdi as isize) as isize,
+		1 => sys_exit(regs.rdi as isize, regs),
 		2 => sys_brk(regs.rdi),
 		3 => sys_open(regs.rdi as *const u8, regs.rsi as usize),
 		4 => sys_stat(regs.rdi as usize),
@@ -58,7 +61,7 @@ pub unsafe extern "C" fn syscall_enter(regs: &mut RegisterState) {
 		),
 		7 => sys_readdir(regs.rdi as isize, regs.rsi as *mut api::dirent),
 		8 => sys_chdir(regs.rdi as *const u8, regs.rsi as usize),
-		9 => sys_fork() as isize,
+		9 => sys_fork(regs) as isize,
 		10 => sys_fstat(regs.rdi as isize, regs.rsi as *mut api::stat) as isize,
 		11 => sys_getcwd(regs.rdi as *mut u8, regs.rsi as usize),
 		69 => sys_brk(regs.rdi),
@@ -119,10 +122,11 @@ fn sys_readdir(fd: isize, ptr: *mut api::dirent) -> isize {
 	0
 }
 
-fn sys_write(_fd: isize, ptr: *const u8, len: usize) -> isize {
+fn sys_write(fd: isize, ptr: *const u8, len: usize) -> isize {
+	trace!("sys_write({:016X?}, {len})", ptr as u64);
 	let cpu = CPU::load();
 	let task = unsafe { &mut *cpu.task };
-	let Some(fd) = task.open_files.get_mut(0) else {
+	let Some(fd) = task.open_files.get_mut(fd as usize) else {
 		return -1;
 	};
 	fd.write(ptr, len) as isize
@@ -153,24 +157,43 @@ fn sys_stat(fd: usize) -> isize {
 	0
 }
 
-fn sys_exit(status: isize) -> usize {
+fn sys_exit(status: isize, regs: &mut RegisterState) -> isize {
 	let cpu = CPU::load();
 	let task = unsafe { &mut *cpu.task };
 
 	info!("process {} exited with status: {status}", task.pid);
-	breakpoint!();
-	0
+
+	if task.next.is_null() {
+		breakpoint!();
+	}
+
+	let next_task = unsafe { &mut *task.next };
+
+	// Restore this task's register state.
+	debug!(
+		"next: {:016X?}, current: {:016X?}",
+		&next_task.register_state as *const RegisterState as usize,
+		regs as *mut RegisterState as usize
+	);
+	unsafe { ptr::write(regs as *mut RegisterState, next_task.register_state) };
+
+	cpu.switch_task(next_task);
+
+	// HACK: syscall handler should not replace contents of RAX for every(/any?)
+	// syscall.
+	next_task.register_state.rax as isize
 }
 
 fn sys_brk(addr: u64) -> isize {
 	let cpu = CPU::load();
 	let task = unsafe { &*cpu.task };
 
-	let (i_pml4, i_pdp, i_pd) = page_table_index(task.rip);
+	let (i_pml4, i_pdp, i_pd) =
+		page_table_index(task.register_state.rip as usize);
 	let pd = PageTable::<PML4>::current_mut()
-		.next(i_pml4)
+		.next_mut(i_pml4)
 		.expect("unmapped page that should definitely be mapped")
-		.next(i_pdp)
+		.next_mut(i_pdp)
 		.expect("unmapped page that should definitely be mapped");
 
 	for i in i_pd..512 {
@@ -199,7 +222,26 @@ fn sys_brk(addr: u64) -> isize {
 	-1
 }
 
-fn sys_fork() -> usize {
+fn sys_fork(regs: &mut RegisterState) -> usize {
+	let cpu = CPU::load();
+
+	let task = cpu.current_task();
+
+	// Save current task's state.
+	task.register_state = regs.clone();
+	// Stack pointer in regs is the kernel's, take the user one from GS??
+	task.register_state.rsp = cpu.rsp3 as u64;
+
+	let mut new_task = task.fork();
+	// Set child pid as return value for parent task.
+	task.register_state.rax = new_task.pid;
+
+	// Set CPU's active task.
+	// TODO: structure for multitasking
+	new_task.next = task as *mut Task;
+	cpu.switch_task(new_task);
+
+	// Return 0 to child.
 	0
 }
 

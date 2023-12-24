@@ -68,6 +68,10 @@ pub(crate) fn syscall3(number: u64, a1: u64, a2: u64, a3: u64) -> u64 {
 	ret
 }
 
+pub fn fork() -> isize {
+	syscall(9) as isize
+}
+
 pub fn exit(status: isize) -> ! {
 	syscall1(1, status as u64);
 	unsafe { unreachable() };
