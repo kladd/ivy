@@ -3,7 +3,7 @@ pub mod ext2;
 pub mod file_descriptor;
 pub mod inode;
 
-use alloc::vec::Vec;
+use alloc::{format, vec::Vec};
 
 pub use file_descriptor::FileDescriptor;
 
@@ -45,7 +45,7 @@ impl FileSystem {
 		//       `self.root()`.
 		let host_inode = self
 			.find(self.root(), path)
-			.expect("Mount point doesn't exist");
+			.expect(&format!("Mount point doesn't exist: {path}"));
 		self.mount_inode(Some(host_inode), guest_root);
 	}
 
