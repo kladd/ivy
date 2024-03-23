@@ -1,4 +1,4 @@
-exe := "$(shell cat /proc/version | grep -q microsoft && echo ".exe")"
+exe := "" #"$(shell cat /proc/version | grep -q microsoft && echo ".exe")"
 disk_size := 1g
 
 target := target/x86_64-unknown-lucy/debug
