@@ -3,5 +3,6 @@ members = [
     "kernel",
     "user/program",
     "user/libc",
+    "user/hello-world",
 ]
 resolver = "2"

@@ -140,7 +140,10 @@ pub extern "C" fn kernel_start(
 	cpu.store();
 
 	// Load after page table switch in switch_task().
-	elf::load(PhysicalAddress(mods[0].start as usize), &mut task);
+	elf::load(
+		PhysicalAddress(mods[0].start as usize).to_virtual(),
+		&mut task,
+	);
 
 	// SYSRET to user program.
 	unsafe {

@@ -84,6 +84,28 @@ impl Task {
 	pub const STACK_BOTTOM: usize = 0xFFFFFE8000000000;
 
 	pub fn new(name: &'static str) -> Self {
+		let mut open_files = Vec::with_capacity(3);
+		open_files
+			.push(FileDescriptor::new(Inode::Device(DeviceInode::Console)));
+		open_files
+			.push(FileDescriptor::new(Inode::Device(DeviceInode::Console)));
+		open_files
+			.push(FileDescriptor::new(Inode::Device(DeviceInode::Serial)));
+
+		let mut fetus = Self {
+			pid: NEXT_PID.fetch_add(1, Ordering::Relaxed),
+			cwd: fs0().find(&fs0().root(), "/home/default").unwrap(),
+			open_files,
+			name,
+			register_state: RegisterState::default(),
+			cr3: 0,
+			next: ptr::null_mut(),
+		};
+		fetus.reimage();
+		fetus
+	}
+
+	pub fn reimage(&mut self) {
 		let mut falloc = frame::current_mut().lock();
 
 		// Copy the existing PML4 table, which maps the kernel already.
@@ -106,28 +128,10 @@ impl Task {
 			false,
 		);
 
-		let mut open_files = Vec::with_capacity(3);
-		open_files
-			.push(FileDescriptor::new(Inode::Device(DeviceInode::Console)));
-		open_files
-			.push(FileDescriptor::new(Inode::Device(DeviceInode::Console)));
-		open_files
-			.push(FileDescriptor::new(Inode::Device(DeviceInode::Serial)));
-
-		let mut register_state = RegisterState::default();
-		register_state.rsp = rsp as u64;
-		register_state.rbp = rbp as u64;
-		register_state.rip = Self::START_ADDR as u64;
-
-		Self {
-			pid: NEXT_PID.fetch_add(1, Ordering::Relaxed),
-			cwd: fs0().find(&fs0().root(), "/home/default").unwrap(),
-			open_files,
-			name,
-			register_state,
-			cr3: cr3 - KERNEL_VMA, // to physical
-			next: ptr::null_mut(),
-		}
+		self.register_state.rsp = rsp as u64;
+		self.register_state.rbp = rbp as u64;
+		self.register_state.rip = Self::START_ADDR as u64;
+		self.cr3 = cr3 - KERNEL_VMA;
 	}
 
 	pub fn fork(&mut self) -> &'static mut Task {

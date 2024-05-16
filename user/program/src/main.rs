@@ -67,10 +67,11 @@ fn shell() {
 				if pid == 0 {
 					print("I'm the child\n");
 				} else {
-					print(&format!("I'm the parent. The child is {pid}.\n"))
+					print(&format!("child({pid}) exited.\n"))
 				}
 			}
 			Some("cat") => cat(tokens.next()),
+			Some("exec") => exec(tokens.next()),
 			_ => continue,
 		}
 	}
@@ -142,6 +143,13 @@ fn ls(path: Option<&str>) {
 		let name = format!("{name}\n");
 
 		write(STDOUT_FILENO, name.as_ptr() as *const c_void, name.len());
+	}
+}
+
+fn exec(path: Option<&str>) {
+	if let Some(path) = path {
+		let exec_path = CString::new(path).unwrap();
+		libc::unistd::exec(exec_path.as_ptr());
 	}
 }
 

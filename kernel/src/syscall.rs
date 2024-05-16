@@ -1,17 +1,20 @@
-use alloc::{format, string::String};
-use core::{arch::asm, cmp::min, mem, mem::size_of, ptr, slice, str};
+use alloc::{format, string::String, vec};
+use core::{
+	arch::asm, cmp::min, ffi::CStr, mem, mem::size_of, ptr, slice, str,
+};
 
 use libc::api;
 use log::{debug, info, trace, warn};
 
 use crate::{
 	arch::amd64::{
-		cli, clock,
+		cli, clock, sti,
 		vmem::{
 			debug_page_directory, page_table_index, Page, PageTable, Table,
 			PML4,
 		},
 	},
+	elf,
 	fs::{
 		fs0,
 		inode::{Inode, Stat},
@@ -64,6 +67,7 @@ pub unsafe extern "C" fn syscall_enter(regs: &mut RegisterState) {
 		9 => sys_fork(regs) as isize,
 		10 => sys_fstat(regs.rdi as isize, regs.rsi as *mut api::stat) as isize,
 		11 => sys_getcwd(regs.rdi as *mut u8, regs.rsi as usize),
+		12 => sys_exec(regs.rdi as *mut u8, regs),
 		69 => sys_brk(regs.rdi),
 		401 => uptime() as isize,
 		403 => debug_long(regs.rdi),
@@ -276,5 +280,49 @@ fn sys_getcwd(buf: *mut u8, len: usize) -> isize {
 
 	let s = prepend_parent(current_inode).unwrap_or(String::from("/"));
 	unsafe { ptr::copy_nonoverlapping(s.as_ptr(), buf, min(len, s.len())) };
+	0
+}
+
+fn sys_exec(pathname: *mut u8, regs: &mut RegisterState) -> isize {
+	if pathname.is_null() {
+		return -1;
+	}
+
+	let Ok(path) = unsafe { CStr::from_ptr(pathname as *const i8) }.to_str()
+	else {
+		return -1;
+	};
+
+	let task = CPU::load().current_task();
+	let current_inode = &task.cwd;
+	let Some(exec_inode) = fs0().find(current_inode, path) else {
+		return -1;
+	};
+
+	info!("Found path: {}", exec_inode.name());
+	if exec_inode.is_dir() {
+		return -1;
+	}
+
+	// Replace current task with a new page table mapping.
+	task.reimage();
+	// switch_task() to load the new page table mainly.
+	CPU::load().switch_task(task);
+	// HACK: switch_task() disables interrupts, but we need them to load the
+	//       binary.
+	sti();
+
+	// Load binary into task's memory.
+	let mut fildes = FileDescriptor::new(exec_inode);
+	let sz = fildes.inode.size();
+	// HACK: Vec<usize> instead of Vec<u8> is for pointer aligment.
+	let mut buf = vec![0usize; sz / usize::BITS as usize];
+	fildes.read(buf.as_mut_ptr() as *mut u8, sz);
+
+	elf::load(buf.as_ptr() as *const u8, task);
+
+	// Set up sysret to restore the new register state.
+	unsafe { ptr::write(regs as *mut RegisterState, task.register_state) };
+
 	0
 }

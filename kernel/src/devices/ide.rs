@@ -100,7 +100,12 @@ pub fn read(
 	bytes_read += read_len;
 
 	for i in 1..num_sectors {
-		todo!()
+		let read_len = min(SECTOR_SIZE, len - bytes_read);
+
+		read_sector(device, start_sector + i as u32, 1);
+		read_bytes(0, bytes_read, read_len, dst);
+
+		bytes_read += read_len;
 	}
 }
 

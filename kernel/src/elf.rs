@@ -73,13 +73,12 @@ struct ELF64ProgramHeader {
 	p_align: u64,
 }
 
-pub fn load(elf: PhysicalAddress, task: &mut Task) {
-	let header: &ELF64Header =
-		unsafe { &*(elf.to_virtual() as *const ELF64Header) };
+pub fn load(elf: *const u8, task: &mut Task) {
+	let header: &ELF64Header = unsafe { &*(elf as *const ELF64Header) };
 	debug!("{header:#?}");
 	let program_headers: &[ELF64ProgramHeader] = unsafe {
 		slice::from_raw_parts(
-			elf.offset(header.e_phoff as usize).to_virtual(),
+			elf.offset(header.e_phoff as isize) as *const ELF64ProgramHeader,
 			header.e_phnum as usize,
 		)
 	};
@@ -91,7 +90,7 @@ pub fn load(elf: PhysicalAddress, task: &mut Task) {
 		debug!("{phdr:#X?}");
 		unsafe {
 			ptr::copy_nonoverlapping(
-				elf.offset(phdr.p_offset as usize).to_virtual(),
+				elf.offset(phdr.p_offset as isize),
 				phdr.p_vaddr as usize as *mut u8,
 				phdr.p_filesz as usize,
 			)
