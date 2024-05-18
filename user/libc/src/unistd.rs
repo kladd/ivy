@@ -31,3 +31,8 @@ pub extern "C" fn write(fd: c_int, buf: *const c_void, len: usize) -> isize {
 pub extern "C" fn exec(pathname: *const c_char) -> c_int {
 	syscall::syscall1(12, pathname as u64) as c_int
 }
+
+#[no_mangle]
+pub extern "C" fn fork() -> isize {
+	syscall::syscall(9) as isize
+}

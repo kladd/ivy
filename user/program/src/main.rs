@@ -62,16 +62,8 @@ fn shell() {
 						.unwrap()
 				);
 			}
-			Some("fork") => {
-				let pid = fork();
-				if pid == 0 {
-					print("I'm the child\n");
-				} else {
-					print(&format!("child({pid}) exited.\n"))
-				}
-			}
 			Some("cat") => cat(tokens.next()),
-			Some("exec") => exec(tokens.next()),
+			Some("run") => run(tokens.next()),
 			_ => continue,
 		}
 	}
@@ -146,10 +138,12 @@ fn ls(path: Option<&str>) {
 	}
 }
 
-fn exec(path: Option<&str>) {
+fn run(path: Option<&str>) {
 	if let Some(path) = path {
 		let exec_path = CString::new(path).unwrap();
-		libc::unistd::exec(exec_path.as_ptr());
+		if libc::unistd::fork() == 0 {
+			libc::unistd::exec(exec_path.as_ptr());
+		}
 	}
 }
 
