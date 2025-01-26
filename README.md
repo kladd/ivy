@@ -4,11 +4,15 @@
 - `nasm`
 - `qemu`
 - `clang` 
-- `grub`
 
 ### Arch Linux
 ```
 pacman -S nasm qemu clang grub xorriso mtools rustup
+```
+
+### macOS
+```
+brew install nasm quemu clang xorriso e2fsprogs
 ```
 
 ### Windows (WSL)

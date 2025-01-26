@@ -1,4 +1,3 @@
-exe := "" #"$(shell cat /proc/version | grep -q microsoft && echo ".exe")"
 disk_size := 1g
 
 target := target/x86_64-unknown-lucy/debug
@@ -31,21 +30,16 @@ $(lib_boot): $(target)/boot.o $(target)/syscall.o
 $(initrd): $(user_program)
 	cp $< $@
 $(rom): $(kernel) $(initrd)
-	mkdir -p $(target)/rom/boot/grub
-	cp boot/grub.cfg $(target)/rom/boot/grub/grub.cfg
-	cp $(kernel) $(target)/rom/boot/lucy
-	cp $(initrd) $(target)/rom/boot/lucy.initrd
-	gunzip -c /usr/share/kbd/consolefonts/sun12x22.psfu.gz > $(target)/rom/boot/font.psfu
-	grub-mkrescue -o $@ $(target)/rom
+	./scripts/build_image.sh $(target)
 $(target)/_disk_image: $(target)/base
-	qemu-img$(exe) create -f raw $@ $(disk_size)
+	qemu-img create -f raw $@ $(disk_size)
 	mkfs.ext2 -d $< $@
 $(target):
 	mkdir -p $@
 
 .PHONY: run
 run: $(rom) $(target)/_disk_image
-	qemu-system-x86_64$(exe) -cdrom $(rom) \
+	qemu-system-x86_64 -cdrom $(rom) \
 		-cpu Broadwell \
 		-drive file=$(target)/_disk_image,format=raw,if=ide \
 		-m 2g \
@@ -57,4 +51,3 @@ run: $(rom) $(target)/_disk_image
 clean:
 	$(RM) -r $(rom) $(target)/boot.o $(target)/syscall.o $(target)/rom
 	cargo clean
-
