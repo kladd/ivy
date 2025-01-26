@@ -1,4 +1,4 @@
-use core::{arch::asm, intrinsics::unreachable};
+use core::arch::asm;
 
 use crate::api;
 
@@ -74,7 +74,7 @@ pub fn fork() -> isize {
 
 pub fn exit(status: isize) -> ! {
 	syscall1(1, status as u64);
-	unsafe { unreachable() };
+	unreachable!()
 }
 
 pub fn open(path: *const u8, len: usize) -> isize {
