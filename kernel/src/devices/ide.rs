@@ -3,9 +3,13 @@ use core::{alloc::Layout, cmp::min, ptr};
 
 use log::trace;
 
-use crate::arch::amd64::{
-	idt::{register_handler, Interrupt},
-	inb, insl, outb, outsl,
+use crate::{
+	arch::amd64::{
+		idt::{register_handler, Interrupt},
+		inb, insl, outb, outsl,
+	},
+	devices::keyboard::BUFFER_SIZE,
+	sync::SpinLock,
 };
 
 pub const SECTOR_SIZE: usize = 512;
@@ -22,8 +26,7 @@ const LBA_MODE: u8 = 0xE0;
 
 const HDA: u8 = 0;
 
-// TODO: no static mut.
-static mut BUFFER: [u8; SECTOR_SIZE] = [0xFF; SECTOR_SIZE];
+static BUFFER: SpinLock<[u8; SECTOR_SIZE]> = SpinLock::new([0xFF; SECTOR_SIZE]);
 
 fn lba(index: u8) -> u8 {
 	index << 4
@@ -158,9 +161,10 @@ fn read_bytes(
 	len: usize,
 	buf: *mut u8,
 ) {
+	let mut guard = BUFFER.lock();
 	unsafe {
 		ptr::copy_nonoverlapping(
-			BUFFER.as_ptr().offset(read_offset as isize),
+			guard.as_mut_ptr().offset(read_offset as isize),
 			buf.offset(write_offset as isize),
 			len,
 		)
@@ -168,29 +172,13 @@ fn read_bytes(
 }
 
 fn read_buffer(offset: usize, len: usize, buf: &mut [u8]) {
-	for i in 0..len {
-		buf[i] = unsafe { BUFFER[i + offset] }
-	}
+	read_bytes(offset, 0, len, buf as *mut _ as *mut u8);
 }
-// pub unsafe fn read_offset<T: Copy>(offset: usize) -> T {
-// 	let offset_ptr = &BUFFER as *const [u8; 512] as usize + offset;
-// 	*(offset_ptr as *const T)
-// }
-//
-// pub unsafe fn read_offset_to_vec(offset: usize, count: usize) -> Vec<u8> {
-// 	let src = &BUFFER as *const u8;
-// 	unsafe {
-// 		Vec::from_raw_parts(
-// 			src.offset(offset as isize) as *mut u8,
-// 			count,
-// 			count,
-// 		)
-// 	}
-// }
 
 extern "x86-interrupt" fn ide_isr(int: Interrupt) {
 	trace!("IDE INTERRUPT: {int:#?}");
-	let buf = unsafe { &BUFFER as *const [u8; SECTOR_SIZE] as usize };
+	let guard = BUFFER.lock();
+	let buf = guard.as_ref() as *const _ as *mut u8 as usize;
 	insl(buf, SECTOR_SIZE / 4, 0x1F0);
 	Interrupt::eoi(46);
 }
