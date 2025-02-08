@@ -4,6 +4,7 @@ use crate::{
 		inb, outb,
 	},
 	devices::character::{Keycode, ReadCharacter},
+	sync::{RacyCell, SpinLock},
 };
 
 const NUL: char = 0 as char;
@@ -38,17 +39,17 @@ const STATUS_DATA_AVAILABLE: u8 = 0x1;
 
 pub const BUFFER_SIZE: usize = 16;
 
-static mut MODS: u8 = 0;
-
-pub static mut KBD: Keyboard<BUFFER_SIZE> = Keyboard {
+pub static KBD: RacyCell<Keyboard<BUFFER_SIZE>> = RacyCell::new(Keyboard {
 	index: 0,
 	buffer: [Keycode::Null; BUFFER_SIZE],
-};
+	mods: 0,
+});
 
 #[derive(Debug)]
 pub struct Keyboard<const N: usize> {
 	index: usize,
 	buffer: [Keycode; N],
+	mods: u8,
 }
 
 impl<const N: usize> ReadCharacter for Keyboard<N> {
@@ -72,6 +73,21 @@ impl<const N: usize> Keyboard<N> {
 			panic!("Keyboard buffer full!");
 		}
 	}
+
+	pub fn mod_shift(&self) -> bool {
+		self.mods & MOD_SHIFT != 0
+	}
+
+	pub fn mod_ctrl(&self) -> bool {
+		self.mods & MOD_CTRL != 0
+	}
+
+	pub fn set_mod(&mut self, modifier: u8) {
+		self.mods |= modifier;
+	}
+	pub fn unset_mod(&mut self, modifier: u8) {
+		self.mods &= !modifier;
+	}
 }
 
 pub fn init() {
@@ -90,48 +106,39 @@ fn is_key_down(scan_code: u8) -> bool {
 	scan_code & I8042_KEY_DEPRESSED == 0
 }
 
-fn mod_shift() -> bool {
-	unsafe { MODS & MOD_SHIFT != 0 }
-}
-
-fn mod_ctrl() -> bool {
-	unsafe { MODS & MOD_CTRL != 0 }
-}
-
 extern "x86-interrupt" fn irq_handler(_: Interrupt) {
+	let mut kbd = unsafe { KBD.get_mut() };
 	while keyboard_has_data() {
-		unsafe {
-			match keyboard_read_scan_code() {
-				0x38 => MODS |= MOD_ALT,
-				0x1D => MODS |= MOD_CTRL,
-				0x2A => MODS |= MOD_SHIFT,
+		match keyboard_read_scan_code() {
+			0x38 => kbd.set_mod(MOD_ALT),
+			0x1D => kbd.set_mod(MOD_CTRL),
+			0x2A => kbd.set_mod(MOD_SHIFT),
 
-				0xB8 => MODS &= !MOD_ALT,
-				0x9D => MODS &= !MOD_CTRL,
-				0xAA => MODS &= !MOD_SHIFT,
+			0xB8 => kbd.unset_mod(MOD_ALT),
+			0x9D => kbd.unset_mod(MOD_CTRL),
+			0xAA => kbd.unset_mod(MOD_SHIFT),
 
-				0x16 if mod_ctrl() => KBD.putc(Keycode::Nak),
-				0x1E if mod_ctrl() => KBD.putc(Keycode::StartOfHeading),
-				0x25 if mod_ctrl() => KBD.putc(Keycode::VerticalTab),
-				0x26 if mod_ctrl() => KBD.putc(Keycode::FormFeed),
+			0x16 if kbd.mod_ctrl() => kbd.putc(Keycode::Nak),
+			0x1E if kbd.mod_ctrl() => kbd.putc(Keycode::StartOfHeading),
+			0x25 if kbd.mod_ctrl() => kbd.putc(Keycode::VerticalTab),
+			0x26 if kbd.mod_ctrl() => kbd.putc(Keycode::FormFeed),
 
-				0x0E => KBD.putc(Keycode::Backspace),
-				0x1C => KBD.putc(Keycode::Newline),
+			0x0E => kbd.putc(Keycode::Backspace),
+			0x1C => kbd.putc(Keycode::Newline),
 
-				scan_code if is_key_down(scan_code) => {
-					let c = if mod_shift() {
-						ASCII_MOD_SHIFT[scan_code as usize]
-					} else {
-						ASCII_NO_MOD[scan_code as usize]
-					};
+			scan_code if is_key_down(scan_code) => {
+				let c = if kbd.mod_shift() {
+					ASCII_MOD_SHIFT[scan_code as usize]
+				} else {
+					ASCII_NO_MOD[scan_code as usize]
+				};
 
-					if c != NUL {
-						KBD.putc(Keycode::Char(c))
-					}
+				if c != NUL {
+					kbd.putc(Keycode::Char(c))
 				}
-
-				_ => continue,
 			}
+
+			_ => continue,
 		}
 	}
 

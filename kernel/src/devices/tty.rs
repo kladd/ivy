@@ -63,7 +63,7 @@ impl WriteCharacter for Terminal {
 
 impl ReadCharacter for Terminal {
 	fn getc(&mut self) -> Option<Keycode> {
-		unsafe { KBD.getc() }
+		unsafe { KBD.get_mut() }.getc()
 	}
 }
 

@@ -1,7 +1,6 @@
 use alloc::string::String;
 use core::fmt::Write;
 
-
 const COLS: usize = 80;
 const ROWS: usize = 25;
 
@@ -53,7 +52,7 @@ impl VideoTerminal {
 	pub fn read_line(&mut self) -> String {
 		let mut s = String::with_capacity(Self::MAX_LINE_LEN);
 		loop {
-			match unsafe { self.getc() } {
+			match self.getc() {
 				Some(Keycode::Newline) => {
 					self.putc(Keycode::Newline);
 					self.blit();
@@ -229,7 +228,7 @@ impl WriteCharacter for VideoTerminal {
 
 impl ReadCharacter for VideoTerminal {
 	fn getc(&mut self) -> Option<Keycode> {
-		unsafe { KBD.getc() }
+		unsafe { KBD.get_mut() }.getc()
 	}
 }
 
