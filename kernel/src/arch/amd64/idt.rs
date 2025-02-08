@@ -81,7 +81,7 @@ impl Interrupt {
 	}
 }
 
-pub fn init_idt() {
+pub fn init() {
 	unsafe {
 		debug!("{:016X?}", print_irq as usize);
 		register_handler(1, print_irq);

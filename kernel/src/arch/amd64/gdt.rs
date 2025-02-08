@@ -3,7 +3,7 @@ use core::{
 	fmt::{Debug, Formatter},
 };
 
-#[repr(packed)]
+#[repr(C, packed)]
 struct SegmentDescriptor {
 	lim0_15: u16,
 	base0_15: u16,
@@ -13,15 +13,15 @@ struct SegmentDescriptor {
 	base24_31: u8,
 }
 
-#[repr(packed)]
-struct TSSDescriptor {
+#[repr(C, packed)]
+pub struct TSSDescriptor {
 	low: SegmentDescriptor,
 	base32_64: u32,
 	reserved: u32,
 }
 
-#[repr(packed)]
-struct FixedGDT {
+#[repr(C, packed)]
+pub struct FixedGDT {
 	kernel_nl: SegmentDescriptor,
 	kernel_cs: SegmentDescriptor,
 	kernel_ss: SegmentDescriptor,
@@ -36,7 +36,7 @@ extern "C" {
 	fn boot_tss();
 }
 
-pub fn adopt_boot_gdt() {
+pub fn adopt_boot_gdt() -> &'static mut FixedGDT {
 	let gdt = unsafe { &mut *(boot_gdt as *mut FixedGDT) };
 	gdt.tss.low.base0_15 = boot_tss as u16;
 	gdt.tss.low.base16_23 = (boot_tss as u64 >> 16) as u8;
@@ -46,6 +46,8 @@ pub fn adopt_boot_gdt() {
 	gdt.tss.low.access = 0xE9;
 
 	unsafe { asm!("ltr ax", in("ax") 0x30) };
+
+	gdt
 }
 
 impl Debug for FixedGDT {

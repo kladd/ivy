@@ -74,7 +74,7 @@ impl<const N: usize> Keyboard<N> {
 	}
 }
 
-pub fn init_keyboard() {
+pub fn init() {
 	register_handler(0x21, irq_handler);
 }
 

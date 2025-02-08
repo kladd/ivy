@@ -36,17 +36,10 @@ use log::{debug, error, info};
 
 use crate::{
 	arch::amd64::{
-		cli,
-		clock::init_clock,
-		gdt, hlt,
-		idt::init_idt,
-		pic::init_pic,
-		sti, vmem,
+		cli, clock, gdt, hlt, idt, pic, sti, vmem,
 		vmem::{map_physical_memory, PageTable, PML4},
 	},
-	devices::{
-		ide, keyboard::init_keyboard, pci::enumerate_pci, serial, tty, vga,
-	},
+	devices::{ide, keyboard, pci::enumerate_pci, serial, tty, vga},
 	fs::{device::DeviceFileSystem, ext2, fs0, inode::Inode},
 	kalloc::KernelAllocator,
 	logger::KernelLogger,
@@ -72,16 +65,17 @@ pub extern "C" fn kernel_start(
 	multiboot_magic: u32,
 	multiboot_info: &MultibootInfo,
 ) {
-	gdt::adopt_boot_gdt();
+	let gdt = gdt::adopt_boot_gdt();
 
 	serial::init();
 	log::set_logger(&LOGGER).unwrap();
 	log::set_max_level(log::STATIC_MAX_LEVEL);
 
+	kdbg!(gdt);
 	debug!("{:#08X?}", multiboot_magic);
 	kdbg!(multiboot_info);
 
-	KernelAllocator::init(_kernel_end as usize, 0x200000);
+	kalloc::init(_kernel_end as usize, 0x200000);
 
 	debug!("kernel end {:016X}", _kernel_end as usize - KERNEL_VMA);
 
@@ -90,10 +84,10 @@ pub extern "C" fn kernel_start(
 	identity_map_reserved(kernel_page_table, &memory_map);
 	map_framebuffer(kernel_page_table, multiboot_info);
 
-	init_idt();
-	init_pic();
-	init_clock();
-	init_keyboard();
+	idt::init();
+	pic::init();
+	clock::init();
+	keyboard::init();
 
 	vga::init();
 	tty::init();

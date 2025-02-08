@@ -2,6 +2,7 @@ use alloc::{alloc::alloc, boxed::Box, vec::Vec};
 use core::{
 	alloc::Layout,
 	arch::asm,
+	mem::ManuallyDrop,
 	ptr,
 	sync::atomic::{AtomicU64, Ordering},
 };

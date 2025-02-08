@@ -22,7 +22,7 @@ const RTC_CENTURY: u8 = 0x32;
 
 static CLOCK: AtomicU64 = AtomicU64::new(0);
 
-pub fn init_clock() {
+pub fn init() {
 	// Set interval interrupt handler.
 	register_handler(32, handle_interval_timer);
 }

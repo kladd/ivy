@@ -51,11 +51,9 @@ unsafe impl GlobalAlloc for SpinLock<KernelAllocator> {
 	}
 }
 
-impl KernelAllocator {
-	pub fn init(placement: usize, size: usize) {
-		let aligned = (placement & !(0x200000 - 1)) + 0x200000;
-		KERNEL_ALLOCATOR.init(aligned, aligned + size);
-	}
+pub fn init(placement: usize, size: usize) {
+	let aligned = (placement & !(0x200000 - 1)) + 0x200000;
+	KERNEL_ALLOCATOR.init(aligned, aligned + size);
 }
 
 pub fn kmalloc(size: usize, align: usize) -> usize {
