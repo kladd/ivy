@@ -110,7 +110,7 @@ pub extern "C" fn kernel_start(
 		)
 	};
 
-	#[cfg(gfx)]
+	#[cfg(feature = "gfx")]
 	init_gfx(multiboot_info, mods, kernel_page_table);
 
 	// Map initrd to load the program stored there.
@@ -146,7 +146,7 @@ pub extern "C" fn kernel_start(
 	}
 }
 
-#[cfg(gfx)]
+#[cfg(feature = "gfx")]
 fn init_gfx(
 	multiboot_info: &MultibootInfo,
 	mods: &[MultibootModuleEntry],
