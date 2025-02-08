@@ -25,22 +25,21 @@ mod proc;
 mod sync;
 mod syscall;
 
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 use core::{
-	arch::asm, cmp::min, fmt::Write, mem::size_of, panic::PanicInfo, ptr,
-	slice, str,
+	arch::asm, cmp::min, mem::size_of, panic::PanicInfo, ptr,
+	slice,
 };
 
-use log::{debug, error, info};
+use log::{debug, error};
 
 use crate::{
 	arch::amd64::{
-		cli, clock, gdt, hlt, idt, pic, sti, vmem,
+		cli, clock, gdt, hlt, idt, pic, sti,
 		vmem::{map_physical_memory, PageTable, PML4},
 	},
 	devices::{ide, keyboard, pci::enumerate_pci, serial, tty, vga},
 	fs::{device::DeviceFileSystem, ext2, fs0, inode::Inode},
-	kalloc::KernelAllocator,
 	logger::KernelLogger,
 	mem::{
 		frame, kernel_map, PhysicalAddress, KERNEL_LMA, KERNEL_VMA, PAGE_SIZE,

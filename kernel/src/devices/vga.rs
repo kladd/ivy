@@ -1,7 +1,5 @@
 use core::fmt::Write;
 
-use log::trace;
-
 use crate::{
 	arch::amd64::outb,
 	devices::character::{Keycode, WriteCharacter},

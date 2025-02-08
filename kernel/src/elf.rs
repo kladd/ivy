@@ -1,8 +1,8 @@
 use core::{ptr, slice};
 
-use log::{debug, info};
+use log::debug;
 
-use crate::{mem::PhysicalAddress, proc::Task};
+use crate::proc::Task;
 
 const EI_NIDENT: usize = 16;
 

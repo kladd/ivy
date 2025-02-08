@@ -1,6 +1,6 @@
 use alloc::{format, string::String, vec};
 use core::{
-	arch::asm, cmp::min, ffi::CStr, mem, mem::size_of, ptr, slice, str,
+	arch::asm, cmp::min, ffi::CStr, ptr, slice, str,
 };
 
 use libc::api;
@@ -8,9 +8,9 @@ use log::{debug, info, trace, warn};
 
 use crate::{
 	arch::amd64::{
-		cli, clock, sti,
+		clock, sti,
 		vmem::{
-			debug_page_directory, page_table_index, Page, PageTable, Table,
+			page_table_index, Page, PageTable, Table,
 			PML4,
 		},
 	},
@@ -20,7 +20,7 @@ use crate::{
 		inode::{Inode, Stat},
 		FileDescriptor,
 	},
-	mem::{frame, PhysicalAddress, PAGE_SIZE},
+	mem::{frame, PAGE_SIZE},
 	proc::{Task, CPU},
 };
 
@@ -236,7 +236,7 @@ fn sys_fork(regs: &mut RegisterState) -> usize {
 	// Stack pointer in regs is the kernel's, take the user one from GS??
 	task.register_state.rsp = cpu.rsp3 as u64;
 
-	let mut new_task = task.fork();
+	let new_task = task.fork();
 	// Set child pid as return value for parent task.
 	task.register_state.rax = new_task.pid;
 

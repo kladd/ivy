@@ -1,7 +1,6 @@
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 use core::fmt::Write;
 
-use log::debug;
 
 const COLS: usize = 80;
 const ROWS: usize = 25;

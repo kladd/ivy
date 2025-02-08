@@ -5,7 +5,7 @@ use core::{
 };
 
 use crate::{
-	devices::{serial::com1, tty::tty0, video_terminal::vdt0},
+	devices::{serial::com1, tty::tty0},
 	fs::inode::{Inode, InodeHash},
 };
 

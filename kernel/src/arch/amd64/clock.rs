@@ -1,7 +1,5 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use log::debug;
-
 use crate::arch::amd64::{
 	idt::{register_handler, Interrupt},
 	inb, outb,

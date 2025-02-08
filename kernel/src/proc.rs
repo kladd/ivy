@@ -1,13 +1,11 @@
-use alloc::{alloc::alloc, boxed::Box, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use core::{
-	alloc::Layout,
 	arch::asm,
-	mem::ManuallyDrop,
 	ptr,
 	sync::atomic::{AtomicU64, Ordering},
 };
 
-use log::{debug, info, trace};
+use log::{info, trace};
 use vmem::{Page, PageTable};
 
 use crate::{
@@ -151,7 +149,7 @@ impl Task {
 			pid: NEXT_PID.fetch_add(1, Ordering::Relaxed),
 			cwd: self.cwd.clone(),
 			open_files: self.open_files.clone(),
-			name: self.name.clone(),
+			name: self.name,
 			register_state: self.register_state.clone(),
 			cr3: (child_pml4 as *mut PageTable<PML4> as usize) - KERNEL_VMA,
 			// to physical

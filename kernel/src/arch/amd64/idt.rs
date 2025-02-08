@@ -12,8 +12,6 @@ use crate::{
 		vmem::{debug_page_directory, Page, PageTable, PML4},
 	},
 	kdbg,
-	mem::PhysicalAddress,
-	proc::CPU,
 };
 
 const MAX_INTERRUPTS: usize = 256;

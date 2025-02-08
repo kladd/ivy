@@ -1,6 +1,6 @@
 use core::alloc::{GlobalAlloc, Layout};
 
-use log::{info, trace, warn};
+use log::{info, trace};
 
 use crate::sync::SpinLock;
 

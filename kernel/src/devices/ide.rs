@@ -8,7 +8,6 @@ use crate::{
 		idt::{register_handler, Interrupt},
 		inb, insl, outb, outsl,
 	},
-	devices::keyboard::BUFFER_SIZE,
 	sync::SpinLock,
 };
 

@@ -7,7 +7,7 @@ use alloc::{
 };
 use core::{cmp::min, slice, str};
 
-use log::{debug, trace};
+use log::trace;
 
 use crate::devices::ide;
 

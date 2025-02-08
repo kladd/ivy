@@ -5,7 +5,7 @@ use crate::{
 	arch::amd64::hlt,
 	devices::{
 		character::{Keycode, ReadCharacter, WriteCharacter},
-		keyboard::{Keyboard, KBD},
+		keyboard::KBD,
 		vga::vga0,
 	},
 	sync::{SpinLock, StaticPtr},
