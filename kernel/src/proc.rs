@@ -20,6 +20,7 @@ use crate::{
 
 static NEXT_PID: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Debug)]
 pub struct CPU {
 	pub rsp0: usize,
 	pub rsp3: usize,
@@ -48,6 +49,10 @@ impl CPU {
 	}
 
 	pub fn current_task(&self) -> &mut Task {
+		if self.task.is_null() {
+			kdbg!(self);
+			panic!("No current task");
+		}
 		unsafe { &mut *self.task }
 	}
 

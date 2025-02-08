@@ -140,8 +140,10 @@ pub extern "C" fn kernel_start(
 	);
 
 	// SYSRET to user program.
+	let next_rip = task.register_state.rip;
+	core::mem::forget(task);
 	unsafe {
-		asm!("jmp _syscall_ret", in("rcx") task.register_state.rip, options(nostack, noreturn))
+		asm!("jmp _syscall_ret", in("rcx") next_rip, options(nostack, noreturn))
 	}
 }
 

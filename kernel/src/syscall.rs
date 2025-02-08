@@ -190,7 +190,7 @@ fn sys_exit(status: isize, regs: &mut RegisterState) -> isize {
 
 fn sys_brk(addr: u64) -> isize {
 	let cpu = CPU::load();
-	let task = unsafe { &*cpu.task };
+	let task = cpu.current_task();
 
 	let (i_pml4, i_pdp, i_pd) =
 		page_table_index(task.register_state.rip as usize);
