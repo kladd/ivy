@@ -5,7 +5,7 @@ use alloc::{
 	sync::Arc,
 	vec::Vec,
 };
-use core::{cmp::min, intrinsics::size_of, slice, str};
+use core::{cmp::min, slice, str};
 
 use log::{debug, trace};
 

@@ -3,7 +3,6 @@
 #![feature(abi_x86_interrupt)]
 #![feature(allocator_api)]
 #![feature(naked_functions)]
-#![feature(core_intrinsics)]
 #![feature(pointer_byte_offsets)]
 // TODO: Un-suppress these warnings.
 #![allow(dead_code)]

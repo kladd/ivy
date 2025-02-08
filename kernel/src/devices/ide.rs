@@ -1,5 +1,5 @@
 use alloc::{alloc::alloc, boxed::Box, vec, vec::Vec};
-use core::{alloc::Layout, cmp::min, intrinsics::size_of, ptr};
+use core::{alloc::Layout, cmp::min, ptr};
 
 use log::trace;
 
