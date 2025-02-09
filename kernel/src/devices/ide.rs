@@ -8,7 +8,7 @@ use crate::{
 		idt::{register_handler, Interrupt},
 		inb, insl, outb, outsl,
 	},
-	sync::SpinLock,
+	sync::RacyCell,
 };
 
 pub const SECTOR_SIZE: usize = 512;
@@ -25,7 +25,7 @@ const LBA_MODE: u8 = 0xE0;
 
 const HDA: u8 = 0;
 
-static BUFFER: SpinLock<[u8; SECTOR_SIZE]> = SpinLock::new([0xFF; SECTOR_SIZE]);
+static BUFFER: RacyCell<[u8; SECTOR_SIZE]> = RacyCell::new([0xFF; SECTOR_SIZE]);
 
 fn lba(index: u8) -> u8 {
 	index << 4
@@ -160,10 +160,10 @@ fn read_bytes(
 	len: usize,
 	buf: *mut u8,
 ) {
-	let mut guard = BUFFER.lock();
+	let disk_buffer = unsafe { BUFFER.get_mut() };
 	unsafe {
 		ptr::copy_nonoverlapping(
-			guard.as_mut_ptr().offset(read_offset as isize),
+			disk_buffer.as_ptr().offset(read_offset as isize),
 			buf.offset(write_offset as isize),
 			len,
 		)
@@ -176,8 +176,8 @@ fn read_buffer(offset: usize, len: usize, buf: &mut [u8]) {
 
 extern "x86-interrupt" fn ide_isr(int: Interrupt) {
 	trace!("IDE INTERRUPT: {int:#?}");
-	let guard = BUFFER.lock();
-	let buf = guard.as_ref() as *const _ as *mut u8 as usize;
+	let buf =
+		unsafe { BUFFER.get_mut() }.as_ref() as *const _ as *mut u8 as usize;
 	insl(buf, SECTOR_SIZE / 4, 0x1F0);
 	Interrupt::eoi(46);
 }
