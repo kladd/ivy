@@ -1,0 +1,12 @@
+[build]
+target = "aarch64-unknown-lucy.json"
+rustflags = [
+  "-l", "boot",
+  "-C", "link-args=-n -Tlinker.ld -Ltarget"
+]
+
+[unstable]
+build-std = ["alloc", "core"]
+
+[target.aarch64-unknown-lucy]
+linker = "aarch64-linux-gnu-ld"

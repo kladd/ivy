@@ -1,0 +1,13 @@
+[package]
+name = "lucy"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "lucy"
+test = false
+doctest = false
+bench = false
+
+[dependencies]
+log = "0.4"

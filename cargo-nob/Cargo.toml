@@ -1,0 +1,8 @@
+[package]
+name = "cargo-nob"
+version = "0.1.0"
+edition = "2024"
+description = "Nobuild inspired build tool for Ivy"
+
+[dependencies]
+clap = { version = "4.5.50", features = ["derive"] }
