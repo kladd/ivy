@@ -13,7 +13,7 @@ unsafe extern "C" {
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
 	unsafe {
-		asm!("ldr x4, ={val}", val = const DEBUG_VALUE, out("x3") _);
+		asm!("ldr x4, ={val}", val = const DEBUG_VALUE, out("x4") _);
 		_cpu_halt();
 	}
 }
