@@ -3,6 +3,9 @@
 
 use core::{arch::asm, panic::PanicInfo};
 
+#[unsafe(no_mangle)]
+pub static DEBUG_VALUE: u64 = 0xDECAFBAD;
+
 unsafe extern "C" {
 	fn _cpu_halt() -> !;
 }
@@ -10,7 +13,7 @@ unsafe extern "C" {
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
 	unsafe {
-		asm!("movz x4, #0xfbad", "movk x4, #0xdeca, lsl #16", out("x4") _);
+		asm!("ldr x4, ={val}", val = const DEBUG_VALUE, out("x3") _);
 		_cpu_halt();
 	}
 }
@@ -18,7 +21,7 @@ fn panic(_info: &PanicInfo) -> ! {
 #[unsafe(no_mangle)]
 pub extern "C" fn kernel_start() -> ! {
 	unsafe {
-		asm!( "movz x3, #0xfbad", "movk x3, #0xdeca, lsl #16", out("x3") _);
+		asm!("ldr x3, ={val}", val = const DEBUG_VALUE, out("x3") _);
 		_cpu_halt();
 	}
 }

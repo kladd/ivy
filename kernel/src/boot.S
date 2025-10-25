@@ -1,4 +1,5 @@
 .extern kernel_start
+.extern DEBUG_VALUE
 
 .section .text.boot
 
@@ -20,7 +21,6 @@ __continue:
 
 .global _cpu_halt
 _cpu_halt:
-	movz x2, #0xfbad
-	movk x2, #0xdeca, lsl #16
+	ldr  x2, DEBUG_VALUE
 	wfi
 	b    _cpu_halt
