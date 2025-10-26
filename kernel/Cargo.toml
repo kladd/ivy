@@ -11,3 +11,6 @@ bench = false
 
 [dependencies]
 log = "0.4"
+
+[features]
+hardware = []

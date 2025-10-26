@@ -1,7 +1,10 @@
+use std::{
+    fs,
+    path::Path,
+    process::{Command, Stdio},
+};
+
 use clap::Parser;
-use std::fs;
-use std::path::Path;
-use std::process::{Command, Stdio};
 
 const KERNEL_PATH: &'static str =
     "kernel/target/aarch64-unknown-lucy/debug/lucy";
@@ -35,7 +38,7 @@ fn build_boot_code() {
         .status()
         .unwrap();
 
-    Command::new("ar")
+    Command::new("aarch64-linux-gnu-ar")
         .args(vec![
             "rvs",
             "kernel/target/libboot.a",
@@ -82,10 +85,8 @@ fn run() {
             "-nographic",
             "-smp",
             "4",
-            "-monitor",
-            "tcp:localhost:8888,server,nowait",
             "-serial",
-            "stdio",
+            "telnet:localhost:5000,server",
             "-d",
             "guest_errors,unimp",
         ])

@@ -6,7 +6,8 @@ rustflags = [
 ]
 
 [unstable]
-build-std = ["alloc", "core"]
+build-std = ["alloc", "core", "compiler_builtins"]
+build-std-features = ["compiler-builtins-mem"]
 
 [target.aarch64-unknown-lucy]
 linker = "aarch64-linux-gnu-ld"
