@@ -2,11 +2,13 @@
 #![no_main]
 
 mod dev;
-mod sync;
 mod logger;
+mod sync;
 
-use core::{arch::asm, panic::PanicInfo};
+use core::panic::PanicInfo;
+
 use log::{error, info, warn};
+
 use crate::logger::KernelLogger;
 
 #[unsafe(no_mangle)]
@@ -22,21 +24,6 @@ pub static ROM_END: u64 = 0x00080000;
 
 unsafe extern "C" {
 	fn _cpu_halt() -> !;
-}
-
-#[repr(C)]
-pub struct ExceptionContext {
-	pub regs: [u64; 31],
-	pub elr: u64,
-	pub spsr: u64,
-	pub esr: u64,
-	pub far: u64,
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn handle_exception(ctx: &mut ExceptionContext) {
-	unsafe { asm!("mov x21, {:x}", in(reg) ctx.elr) };
-	panic!();
 }
 
 #[panic_handler]
