@@ -32,7 +32,7 @@ const CR_RX_EN: u32 = 1 << 9;
 const FR_BUSY: u32 = 1 << 3;
 
 const LCRH_F_EN: u32 = 1 << 4;
-const LCRH_WLEN8: u32 = (0x3 << 5);
+const LCRH_WLEN8: u32 = 0x3 << 5;
 
 const UART_CLK: u32 = 24000000;
 const UART_BAUD: u32 = 115200;

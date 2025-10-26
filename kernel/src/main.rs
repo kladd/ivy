@@ -35,7 +35,7 @@ pub struct ExceptionContext {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn handle_exception(ctx: &mut ExceptionContext) {
-	unsafe { asm!("mov x21, {}", in(reg) ctx.elr) };
+	unsafe { asm!("mov x21, {:x}", in(reg) ctx.elr) };
 	panic!();
 }
 
@@ -45,8 +45,8 @@ fn panic(info: &PanicInfo) -> ! {
 	let col = info.location().map(|l| l.column()).unwrap_or(69);
 	error!("{} {:?}", info.message(), info.location().unwrap());
 	unsafe {
-		asm!("mov x26, {}", in(reg) line);
-		asm!("mov x29, {}", in(reg) col);
+		asm!("mov x26, {:x}", in(reg) line);
+		asm!("mov x29, {:x}", in(reg) col);
 		_cpu_halt();
 	}
 }

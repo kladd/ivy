@@ -16,10 +16,12 @@ struct Args {
     cmd: Option<SubCmd>,
 }
 
-#[derive(clap::Subcommand, Default)]
+#[derive(clap::Subcommand)]
 enum SubCmd {
-    #[default]
-    Build,
+    Build {
+        #[clap(long, action)]
+        hardware: bool,
+    },
     Run,
     Clean,
 }
@@ -48,28 +50,30 @@ fn build_boot_code() {
         .unwrap();
 }
 
-fn build_kernel() {
-    Command::new("cargo")
-        .args(vec![
-            "+nightly",
-            "-Z",
-            "unstable-options",
-            "-C",
-            "kernel",
-            "build",
-        ])
-        .status()
-        .unwrap();
+fn build_kernel(hardware: bool) {
+    let mut cmd = Command::new("cargo");
+    cmd.args(vec![
+        "+nightly",
+        "-Z",
+        "unstable-options",
+        "-C",
+        "kernel",
+        "build",
+    ]);
+    if hardware {
+        cmd.arg("--features hardware");
+    }
+    cmd.status().unwrap();
 }
 
-fn build() {
+fn build(hardware: bool) {
     build_boot_code();
-    build_kernel();
+    build_kernel(hardware);
 }
 
 fn run() {
     if !Path::new(KERNEL_PATH).exists() {
-        build();
+        build(false);
     }
 
     Command::new("qemu-system-aarch64")
@@ -113,8 +117,8 @@ fn clean() {
 
 fn main() {
     let args = Args::parse();
-    match args.cmd.unwrap_or_default() {
-        SubCmd::Build => build(),
+    match args.cmd.unwrap_or(SubCmd::Build { hardware: false }) {
+        SubCmd::Build { hardware } => build(hardware),
         SubCmd::Run => run(),
         SubCmd::Clean => clean(),
     }
