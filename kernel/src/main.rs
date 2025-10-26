@@ -41,12 +41,8 @@ pub extern "C" fn handle_exception(ctx: &mut ExceptionContext) {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-	let line = info.location().map(|l| l.line()).unwrap_or(69);
-	let col = info.location().map(|l| l.column()).unwrap_or(69);
 	error!("{} {:?}", info.message(), info.location().unwrap());
 	unsafe {
-		asm!("mov x26, {:x}", in(reg) line);
-		asm!("mov x29, {:x}", in(reg) col);
 		_cpu_halt();
 	}
 }
